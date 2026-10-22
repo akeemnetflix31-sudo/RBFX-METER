@@ -1,42 +1,23 @@
-# RBFX Meter — RBFX Client Portal
+# RBFX Client Portal
 
-Bilingual English / Bahasa Melayu Malaysia portal on Vercel. Market values and setups are software research output only. Public reference prices are not broker-authenticated and may differ from a broker quote. Static baselines are explicitly stale and never produce active setups.
+Bilingual English / Bahasa Melayu Malaysia research portal. Market prices, candles, and indicator studies are accepted only from a validated direct EA Master MT5 payload. They are software research output, not independently broker-verified, investment advice, or trade instructions.
 
-## Unified feed API
+## Market-feed routes
 
-`/api/feed` accepts POST ingest, GET status, and GET market reads. Vercel rewrites `/api/market` and `/api/mt5-feed` to this same function so requests can share a warm instance's RAM cache.
+- `POST /api/mt5-feed` ingests a validated MT5 batch.
+- `GET /api/mt5-feed` returns the EA heartbeat status.
+- `GET /api/market?asset=XAUUSD` reads the latest batch from the same unified `/api/feed` route. `vercel.json` rewrites both endpoints into that single function route.
+- When no valid EA batch is visible in RAM, the market endpoint returns HTTP 503 with `WAITING_FOR_DIRECT_EA_MASTER_FEED`; the portal shows “Waiting for direct EA Master Feed...” and does not substitute another price/candle provider or static prices.
+- A valid batch expires from the RAM feed gate after 120 seconds. EA source status is `EA_MASTER_DIRECT_ONLY`; the raw ingestion contract remains `RBFX_MT5`.
 
-- `POST /api/mt5-feed` (also `/api/feed`) — validates the v1 EA payload and holds the latest complete batch in volatile RAM for at most 120 seconds. No Vercel Blob or durable database write occurs. A successful response reports `storage: IN_MEMORY_EPHEMERAL`.
-- `GET /api/mt5-feed` — reports heartbeat freshness, age, accepted instrument count and the current warm-instance scope. `GET /api/market?asset=XAUUSD` (also `/api/feed?asset=XAUUSD`) — a valid EA batch received in the last 120 seconds takes priority; otherwise Tier 2 fetches public no-key Biquote closed M1/M15 OHLC, then Tier 3 returns one built-in baseline candle when live tiers fail. Stale quote/candle status remains visible if the recent EA payload itself contains stale market data.
+## Important Vercel RAM limitation
 
-### Vercel RAM limitation
+The shared endpoint allows POST and GET requests to use one module-level RAM slot when they land on the same warm Vercel function instance. RAM is ephemeral and instance-local: cold starts clear it, and Vercel may route the EA POST and browser GET to different instances. Therefore this design is best-effort, not globally shared or guaranteed. If a GET cannot see fresh EA data, it intentionally waits instead of displaying a fallback. Guaranteed cross-instance delivery requires a shared data service; RAM alone cannot provide that guarantee.
 
-RAM belongs to one warm serverless instance only. Cold starts erase it; scaled instances do not share it; therefore an EA POST and a buyer GET may reach different instances. Tier 1 is best-effort, not a globally reliable stream. The public Biquote fallback compensates when a GET cannot see a live EA batch. A shared, reliable EA stream would require shared persistence or a network cache, which is deliberately not used in this RAM-only mode.
+## Other endpoints
 
-### Fallback safety
+The economic-calendar endpoint is separate from market prices and does not supply instrument quotes or candles. Access validation is a local format check only; it does not authenticate an account or broker.
 
-- Biquote is used for free public OHLC across the supported FX, metal and crypto symbols; it is not a broker quote. Frankfurter is not used for metals or intraday candle reconstruction, and CoinGecko is not used for broker-equivalent M15 OHLC.
-- Tier 3 uses built-in reference values captured on 2026-10-22. It is labelled `STATIC BASELINE · NOT LIVE`, marked stale, shows only a single flat baseline candle, and has no indicators or active setup levels.
-- The A+ M15 thresholds, freshness checks, two-hour expiry, invalidation and no-chase logic are unchanged. Static/stale data cannot create an active setup.
-- Valid supported market requests fall back rather than return 503 when live tiers fail. Invalid asset values remain client errors; no system can promise that every API error or external provider failure disappears.
+## Build and tests
 
-## Other API routes
-
-- `POST /api/access` checks exactly eight numeric digits. It does not authenticate/verify an account and does not persist account numbers, IPs or new analytics.
-- `GET /api/news` provides economic calendar data with attribution.
-- `GET /api/owner-stats` is an optional read-only view of historical anonymous aggregates that may still exist in Blob.
-
-## Vercel Blob
-
-Market/feed and access-check paths do not call Blob. `scripts/cleanup-unused-blob-cache.mjs` lists by default and only deletes stale cache/feed objects after an explicit confirmation; it preserves usage-history and unrelated namespaces. The Blob store may remain paused until its reset window; deleting objects does not reverse the already-counted monthly Advanced Operations.
-
-## Build and test
-
-```sh
-npm ci --no-audit --no-fund
-npm run build
-npm test
-npm run check
-```
-
-`vercel.json` builds the UI and routes `/api/market` and `/api/mt5-feed` through `/api/feed`. The separate ICTMACROVIP project and `https://ictmacrovip.com/api/feed` endpoint are outside this repository and are not modified.
+Use `npm test`, `npm run check`, and `npm run build`. Tests verify route unification, RAM heartbeat/freshness, direct EA source marking, and fail-closed behavior when data is missing or expired.

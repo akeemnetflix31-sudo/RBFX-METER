@@ -19,7 +19,7 @@
     <section class="card" aria-labelledby="title">
       <h1 id="title">Statistik penggunaan</h1>
       <p class="sub">Owner statistics · Ringkasan agregat format semakan sahaja</p>
-      <div class="notice"><strong>Mod awam:</strong> Semakan format baharu tidak lagi direkodkan ke Vercel Blob. Jika stor mengandungi rekod statistik lama, paparan ini hanya menunjukkan data sejarah; tiada nombor akaun atau alamat IP disimpan.</div>
+      <div class="notice"><strong>Mod awam:</strong> Statistik format disimpan sementara dalam RAM instance ini sahaja. Data boleh hilang ketika cold start dan tidak dikongsi merentas instance; nombor akaun atau alamat IP tidak disimpan.</div>
       <form class="form" id="ownerForm">
         <label class="hidden" for="secret">Rahsia pemilik</label>
         <input id="secret" type="password" autocomplete="current-password" placeholder="Rahsia pemilik Vercel" required>
