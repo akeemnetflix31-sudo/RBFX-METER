@@ -11,11 +11,11 @@
   "rewrites": [
     {
       "source": "/api/market",
-      "destination": "/api/feed"
+      "destination": "/api/feed?mode=market"
     },
     {
       "source": "/api/mt5-feed",
-      "destination": "/api/feed"
+      "destination": "/api/feed?mode=feed"
     },
     {
       "source": "/owner-stats",

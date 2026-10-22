@@ -4,10 +4,10 @@ Bilingual English / Bahasa Melayu Malaysia portal on Vercel. Market values and s
 
 ## Unified feed API
 
-`/api/feed` accepts both methods. Vercel rewrites `/api/market` and `/api/mt5-feed` to this same function so GET and POST can share a warm instance's RAM cache.
+`/api/feed` accepts POST ingest, GET status, and GET market reads. Vercel rewrites `/api/market` and `/api/mt5-feed` to this same function so requests can share a warm instance's RAM cache.
 
-- `POST /api/mt5-feed` (also `/api/feed`) — validates the v1 EA payload and holds the latest complete batch in volatile RAM for at most 60 seconds. No Vercel Blob or durable database write occurs. A successful response reports `storage: IN_MEMORY_EPHEMERAL`.
-- `GET /api/market?asset=XAUUSD` (also `/api/feed?asset=XAUUSD`) — Tier 1 reads the fresh in-memory EA batch, Tier 2 fetches public no-key Biquote closed M1/M15 OHLC, Tier 3 returns one built-in baseline candle when both live tiers fail.
+- `POST /api/mt5-feed` (also `/api/feed`) — validates the v1 EA payload and holds the latest complete batch in volatile RAM for at most 120 seconds. No Vercel Blob or durable database write occurs. A successful response reports `storage: IN_MEMORY_EPHEMERAL`.
+- `GET /api/mt5-feed` — reports heartbeat freshness, age, accepted instrument count and the current warm-instance scope. `GET /api/market?asset=XAUUSD` (also `/api/feed?asset=XAUUSD`) — a valid EA batch received in the last 120 seconds takes priority; otherwise Tier 2 fetches public no-key Biquote closed M1/M15 OHLC, then Tier 3 returns one built-in baseline candle when live tiers fail. Stale quote/candle status remains visible if the recent EA payload itself contains stale market data.
 
 ### Vercel RAM limitation
 

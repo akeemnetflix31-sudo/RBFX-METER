@@ -6,7 +6,7 @@ import { createMt5FeedHandler } from './mt5-feed.mjs';
 // function so a warm instance can share its most recent validated batch.
 let latestFeed = null;
 let latestFeedStoredAt = 0;
-const RAM_FEED_TTL_MS = 60_000;
+const RAM_FEED_TTL_MS = 120_000;
 
 const memoryStoreFactory = () => ({
   async setJSON(key, value) {
@@ -18,13 +18,34 @@ const memoryStoreFactory = () => ({
 });
 
 async function readFreshRamFeed() {
-  if (!latestFeed) return null;
-  if (Date.now() - latestFeedStoredAt > RAM_FEED_TTL_MS) {
-    latestFeed = null;
-    latestFeedStoredAt = 0;
-    return null;
-  }
+  if (!latestFeed || Date.now() - latestFeedStoredAt > RAM_FEED_TTL_MS) return null;
   return latestFeed;
+}
+
+function feedHeartbeatStatus(now = Date.now()) {
+  const hasFeed = Boolean(latestFeed);
+  const ageMs = hasFeed ? Math.max(0, now - latestFeedStoredAt) : null;
+  const fresh = ageMs !== null && ageMs <= RAM_FEED_TTL_MS;
+  const assets = Object.keys(latestFeed?.instruments || {});
+  return {
+    ok: true,
+    source: fresh ? 'RBFX_MT5' : null,
+    connected: fresh,
+    stale: !fresh,
+    storage: 'IN_MEMORY_EPHEMERAL',
+    cacheScope: 'THIS_WARM_VERCEL_INSTANCE_ONLY',
+    feedHeartbeatAgeSeconds: ageMs === null ? null : Math.floor(ageMs / 1000),
+    receivedAt: Number.isFinite(Number(latestFeed?.receivedAt)) ? Number(latestFeed.receivedAt) : null,
+    instrumentCount: fresh ? assets.length : 0,
+    acceptedInstruments: fresh ? assets : [],
+    ttlSecondsRemaining: fresh ? Math.max(0, Math.ceil((RAM_FEED_TTL_MS - ageMs) / 1000)) : 0
+  };
+}
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: {
+    'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'
+  }});
 }
 
 const receiveFeed = createMt5FeedHandler({ storeFactory: memoryStoreFactory, storageMode: 'IN_MEMORY_EPHEMERAL' });
@@ -45,11 +66,15 @@ async function normalizedMarketResponse(request, context) {
 
 export default async function handler(request, context) {
   if (request.method === 'POST') return receiveFeed(request, context);
-  if (request.method === 'GET') return normalizedMarketResponse(request, context);
-  return new Response(JSON.stringify({ ok: false, error: 'METHOD_NOT_ALLOWED' }), {
-    status: 405,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }
-  });
+  if (request.method === 'GET') {
+    const url = new URL(request.url);
+    const mode = url.searchParams.get('mode');
+    if (mode === 'feed' || mode === 'status' || (!url.searchParams.has('asset') && mode !== 'market')) {
+      return json(feedHeartbeatStatus());
+    }
+    return normalizedMarketResponse(request, context);
+  }
+  return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
 }
 
-export { RAM_FEED_TTL_MS, readFreshRamFeed };
+export { RAM_FEED_TTL_MS, readFreshRamFeed, feedHeartbeatStatus };

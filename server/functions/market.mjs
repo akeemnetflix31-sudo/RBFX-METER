@@ -345,7 +345,13 @@ export function createMarketHandler({ feedReader = null, clock = () => Date.now(
       try { feed = await feedReader(); } catch { /* public reference fallback may still be available */ }
     }
     mt5Market = mt5InstrumentToMarket(asset, feed, now);
-    if (mt5Market && !mt5Market.stale) {
+    const receivedAt = Number(feed?.receivedAt);
+    const eaPayloadFresh = feed?.source === 'RBFX_MT5' && Number.isFinite(receivedAt) &&
+      receivedAt <= now + 30_000 && now - receivedAt <= 120_000;
+    // A valid, recent EA batch for this instrument has absolute priority, even if
+    // individual quotes/candles are stale. Keep its stale state visible; never mask it
+    // with public data during the 2-minute heartbeat window.
+    if (mt5Market && eaPayloadFresh) {
       mt5Market.fallbackTier = 1;
       mt5Market.feedMode = 'IN_MEMORY_EPHEMERAL';
       mt5Market.sourceLabel = 'EA Master · ephemeral RAM cache';
