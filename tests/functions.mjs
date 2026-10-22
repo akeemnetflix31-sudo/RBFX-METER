@@ -48,13 +48,13 @@ const marketData = mt5InstrumentToMarket('XAUUSD', latestFeed, now);
 assert.equal(marketData?.source, 'RBFX_MT5');
 assert.equal(marketData?.charts.M15.length, 40);
 assert.equal(marketData?.rawTimeframes.join(','), 'H1,M15,M5,M1');
-const disabledFeedHandler = createMt5FeedHandler({ clock: () => now });
-const disabledFeedResponse = await disabledFeedHandler(new Request('https://example.test/api/mt5-feed', {
+const defaultRamFeedHandler = createMt5FeedHandler({ clock: () => now });
+const defaultRamFeedResponse = await defaultRamFeedHandler(new Request('https://example.test/api/mt5-feed', {
   method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ version: 1, instruments: [sampleInstrument] })
 }));
-assert.equal(disabledFeedResponse.status, 410);
-assert.equal((await disabledFeedResponse.json()).error, 'FEED_STORAGE_DISABLED_PUBLIC_MODE');
+assert.equal(defaultRamFeedResponse.status, 200);
+assert.equal((await defaultRamFeedResponse.json()).storage, 'IN_MEMORY_EPHEMERAL');
 
 const noFeed = createMarketHandler({ feedReader: async () => null, fallbackLoader: async () => { throw new Error('fallback unavailable in this test'); }, clock: () => now });
 const staticFallbackResponse = await noFeed(new Request('https://example.test/api/market?asset=XAUUSD'));
@@ -139,6 +139,9 @@ assert.equal(responseHeaders['cache-control'], 'no-store');
 assert.deepEqual(JSON.parse(fakeRes.body), { method: 'POST', path: '/api/access', query: 'XAUUSD', payload: { accountNumber: '12345678' } });
 
 const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
+const apiFiles = await readdir(new URL('../api/', import.meta.url));
+assert.equal(apiFiles.includes('market.mjs'), false, 'market alias must not shadow the shared feed rewrite');
+assert.equal(apiFiles.includes('mt5-feed.mjs'), false, 'MT5 alias must not shadow the shared feed rewrite');
 assert.equal(config.outputDirectory, 'public');
 assert.equal(config.buildCommand, 'npm run build');
 assert.ok(config.functions['api/**/*.mjs']);
@@ -169,4 +172,4 @@ async function scan(dir) {
   }
 }
 await scan(resolve(projectRoot.pathname));
-console.log('PASS: 120-second EA priority, per-instance heartbeat status, public/static fallback, no market Blob access, and Vercel rewrites.');
+console.log('PASS: 120-second EA priority, shared API route wiring, per-instance heartbeat, and fallback behavior.');

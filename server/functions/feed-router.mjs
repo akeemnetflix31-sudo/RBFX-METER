@@ -1,4 +1,4 @@
-import { normalizeMarketPayload } from '../../api/market.mjs';
+import { normalizeMarketPayload } from './market-payload.mjs';
 import { createMarketHandler } from './market.mjs';
 import { createMt5FeedHandler } from './mt5-feed.mjs';
 

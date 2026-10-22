@@ -9,7 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node tests/setup-quality.mjs && node tests/m15-market-payload.mjs && node tests/functions.mjs",
-    "check": "node --check api/_shared.mjs && node --check api/access.mjs && node --check api/feed.mjs && node --check api/market.mjs && node --check api/mt5-feed.mjs && node --check api/news.mjs && node --check api/owner-stats.mjs && node --check server/functions/feed-router.mjs && node --check server/functions/market.mjs && node --check server/functions/mt5-feed.mjs"
+    "check": "node --check api/_shared.mjs && node --check api/access.mjs && node --check api/feed.mjs && node --check server/functions/market-payload.mjs && node --check api/news.mjs && node --check api/owner-stats.mjs && node --check server/functions/feed-router.mjs && node --check server/functions/market.mjs && node --check server/functions/mt5-feed.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.2",

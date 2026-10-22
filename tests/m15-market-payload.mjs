@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { normalizeMarketPayload } from '../api/market.mjs';
+import { normalizeMarketPayload } from '../server/functions/market-payload.mjs';
 const M15=900_000, nowBase=1_800_000_000_000;
 function makeRows(step,count,baseClose=100,breakout=false){const rows=[];for(let i=0;i<count;i++){const t=nowBase+i*step;const row=breakout&&i===count-1?{t,o:100.5,h:103.5,l:100.4,c:103.3}:{t,o:baseClose,h:baseClose+1,l:baseClose-1,c:baseClose};for(const offset of [0,12_000,27_000])rows.push({...row,t:t+offset});}return rows;}
 const m15=makeRows(M15,40,100,true),last=m15.at(-1),now=last.t+M15+60_000;

@@ -45,7 +45,16 @@ function cleanInstrument(value, now) {
   return { asset, symbol, quote: { bid, ask, t: quoteAt }, m1, m5, m15, h1 };
 }
 
-export function createMt5FeedHandler({ storeFactory = null, storageMode = 'DISABLED', clock = () => Date.now() } = {}) {
+let defaultVolatileFeed = null;
+const defaultMemoryStoreFactory = () => ({
+  async setJSON(key, value) {
+    if (key !== 'latest') throw new Error('unsupported volatile feed key');
+    defaultVolatileFeed = value;
+    return { modified: true, etag: `ram-${Date.now()}` };
+  }
+});
+
+export function createMt5FeedHandler({ storeFactory = defaultMemoryStoreFactory, storageMode = 'IN_MEMORY_EPHEMERAL', clock = () => Date.now() } = {}) {
   return async function handler(request) {
     if (request.method !== 'POST') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
     // The unified /api/feed route injects a volatile RAM adapter; no persistent store is used.
@@ -66,7 +75,7 @@ export function createMt5FeedHandler({ storeFactory = null, storageMode = 'DISAB
       instruments[clean.asset] = clean;
     }
     if (!Object.keys(instruments).length) return json({ ok: false, error: 'NO_VALID_INSTRUMENTS' }, 400);
-    if (typeof storeFactory !== 'function') return json({ ok: false, error: 'FEED_STORAGE_DISABLED_PUBLIC_MODE' }, 410);
+    if (typeof storeFactory !== 'function') return json({ ok: false, error: 'FEED_STORE_UNAVAILABLE' }, 503);
     const feed = { version: 1, source: 'RBFX_MT5', receivedAt: now, instruments };
     try { await storeFactory().setJSON('latest', feed); }
     catch { return json({ ok: false, error: 'FEED_STORE_UNAVAILABLE' }, 503); }
