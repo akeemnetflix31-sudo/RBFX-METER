@@ -3,7 +3,7 @@ import { cleanClosedM15, deriveM15Setup } from '../scripts/setup-quality.mjs';
 
 const step = 15 * 60_000;
 const base = 1_800_000_000_000;
-function fixture({ price = 102.5, aligned = true, expired = false, source = 'ROBOFOREX_MT5', breakout = true, weakCandle = false, confidence = null } = {}) {
+function fixture({ price = 102.5, aligned = true, expired = false, source = 'RBFX_MT5', breakout = true, weakCandle = false, confidence = null, stale = false } = {}) {
   const rows = Array.from({ length: 40 }, (_, index) => {
     const t = base + index * step;
     return { t, o: 100, h: 101, l: 99, c: 100 };
@@ -20,8 +20,11 @@ function fixture({ price = 102.5, aligned = true, expired = false, source = 'ROB
   const last = rows.at(-1), now = last.t + step + 60_000;
   const timeframeDirection = aligned ? 'BULLISH' : 'BEARISH';
   const data = {
-    source, dataSource: 'ROBOFOREX_MT5_RAW_OHLC', stale: false,
+    source,
+    dataSource: source === 'BIQUOTE' ? 'BIQUOTE_FREE_FALLBACK' : 'RBFX_MT5_RAW_OHLC',
+    stale,
     quoteAgeSeconds: 30, feedHeartbeatAgeSeconds: 30, referencePrice: price,
+    receivedAt: now - 15_000, ageMinutes: 0,
     digits: 2,
     charts: { M15: rows, M1: [{ t: now - 60_000, o: price, h: price, l: price, c: price }] },
     timeframes: Object.fromEntries(['H1', 'M15', 'M5', 'M1'].map(tf => [tf, { direction: timeframeDirection }]))
@@ -66,9 +69,19 @@ assert.equal(deriveM15Setup(threeOfFour.data, threeOfFour.now).status.state, 'AC
 
 const weakCandle = fixture({ weakCandle: true });
 assert.equal(deriveM15Setup(weakCandle.data, weakCandle.now).status.state, 'NO_SETUP');
-const fallback = fixture({ source: 'BIQUOTE' });
-assert.equal(deriveM15Setup(fallback.data, fallback.now).status.state, 'NO_SETUP');
-assert.deepEqual(deriveM15Setup(fallback.data, fallback.now).items, []);
+const publicReference = fixture({ source: 'BIQUOTE' });
+const publicSetup = deriveM15Setup(publicReference.data, publicReference.now);
+assert.equal(publicSetup.status.state, 'ACTIVE', 'fresh public reference candles can generate study-only A+ setups');
+assert.equal(publicSetup.status.quality, 'A+');
+assert.equal(publicSetup.status.sourceMode, 'PUBLIC_REFERENCE');
+assert.match(publicSetup.status.message, /NOT BROKER-VERIFIED/);
+assert.equal(publicSetup.items.length, 5);
+const stalePublic = fixture({ source: 'BIQUOTE', stale: true });
+assert.equal(deriveM15Setup(stalePublic.data, stalePublic.now).status.state, 'NO_SETUP', 'stale public references fail closed');
+const wrongPublicCache = fixture({ source: 'BIQUOTE' });
+wrongPublicCache.data.dataSource = 'BIQUOTE_FREE_CACHE';
+wrongPublicCache.data.stale = true;
+assert.equal(deriveM15Setup(wrongPublicCache.data, wrongPublicCache.now).status.state, 'NO_SETUP', 'stale public cache cannot produce levels');
 
 const expired = fixture({ expired: true, price: 103.1 });
 const expiredSetup = deriveM15Setup(expired.data, expired.now);

@@ -1,5 +1,4 @@
-import { getMt5FeedStore } from './mt5-feed-store.mjs';
-
+// Persistent feed storage is intentionally disabled; the unified feed router injects RAM only.
 // Contract mirrored by RBFXMeter_ReadOnlyFeed.mq5: v1 envelope, canonical assets,
 // epoch-millisecond UTC timestamps, and 30..600 raw closed bars per timeframe.
 const FEED_SCHEMA_VERSION = 1;
@@ -46,11 +45,10 @@ function cleanInstrument(value, now) {
   return { asset, symbol, quote: { bid, ask, t: quoteAt }, m1, m5, m15, h1 };
 }
 
-export function createMt5FeedHandler({ storeFactory = getMt5FeedStore, clock = () => Date.now() } = {}) {
+export function createMt5FeedHandler({ storeFactory = null, storageMode = 'DISABLED', clock = () => Date.now() } = {}) {
   return async function handler(request) {
     if (request.method !== 'POST') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
-    // Intentionally public tokenless ingestion: schema, OHLC, timestamp, and payload-size checks remain.
-    // Any internet client can still submit valid-shaped prices and overwrite the latest feed.
+    // The unified /api/feed route injects a volatile RAM adapter; no persistent store is used.
     const declaredLength = Number(request.headers.get('content-length') || 0);
     if (declaredLength > MAX_BODY_BYTES) return json({ ok: false, error: 'PAYLOAD_TOO_LARGE' }, 413);
     let raw;
@@ -68,10 +66,11 @@ export function createMt5FeedHandler({ storeFactory = getMt5FeedStore, clock = (
       instruments[clean.asset] = clean;
     }
     if (!Object.keys(instruments).length) return json({ ok: false, error: 'NO_VALID_INSTRUMENTS' }, 400);
-    const feed = { version: 1, source: 'ROBOFOREX_MT5', receivedAt: now, instruments };
+    if (typeof storeFactory !== 'function') return json({ ok: false, error: 'FEED_STORAGE_DISABLED_PUBLIC_MODE' }, 410);
+    const feed = { version: 1, source: 'RBFX_MT5', receivedAt: now, instruments };
     try { await storeFactory().setJSON('latest', feed); }
     catch { return json({ ok: false, error: 'FEED_STORE_UNAVAILABLE' }, 503); }
-    return json({ ok: true, source: feed.source, receivedAt: now, accepted: Object.keys(instruments) });
+    return json({ ok: true, source: feed.source, storage: storageMode, receivedAt: now, accepted: Object.keys(instruments) });
   };
 }
 

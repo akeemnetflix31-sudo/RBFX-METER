@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="color-scheme" content="dark">
-  <title>Owner Statistics · RBFX Meter</title>
+  <title>Owner Statistics · RBFX Client Portal</title>
   <style>
     :root{color-scheme:dark;--bg:#07101c;--panel:#101f31;--line:#293c52;--text:#eef3f9;--muted:#9bacc0;--gold:#d8b56a;--green:#56d3a2;--red:#ff9cac}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,#1b3047 0,transparent 55%),var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;padding:24px}
@@ -15,11 +15,11 @@
 </head>
 <body>
   <main>
-    <div class="brand">RBFX Meter · Panel Pemilik</div>
+    <div class="brand">RBFX Client Portal · Panel Pemilik</div>
     <section class="card" aria-labelledby="title">
       <h1 id="title">Statistik penggunaan</h1>
       <p class="sub">Owner statistics · Ringkasan agregat format semakan sahaja</p>
-      <div class="notice"><strong>Privasi:</strong> Rekod statistik aplikasi hanya menyimpan bilangan semakan format harian. Nombor akaun, alamat IP, identiti unik dan senarai akaun aktif tidak disimpan dalam rekod ini. Semakan 8 digit/prefix bukan pengesahan akaun RoboForex sebenar. Pengiraan termasuk setiap semakan format diterima dan boleh merangkumi ulangan atau permintaan automatik.</div>
+      <div class="notice"><strong>Mod awam:</strong> Semakan format baharu tidak lagi direkodkan ke Vercel Blob. Jika stor mengandungi rekod statistik lama, paparan ini hanya menunjukkan data sejarah; tiada nombor akaun atau alamat IP disimpan.</div>
       <form class="form" id="ownerForm">
         <label class="hidden" for="secret">Rahsia pemilik</label>
         <input id="secret" type="password" autocomplete="current-password" placeholder="Rahsia pemilik Vercel" required>
@@ -32,7 +32,7 @@
         <article class="metric"><small>Hari yang mempunyai rekod</small><strong id="days">—</strong></article>
       </section>
       <section class="history hidden" id="history"><h2>Ringkasan harian · 30 hari terkini</h2><div class="table-wrap"><table><thead><tr><th>Tarikh (MYT)</th><th>Semakan format diterima</th></tr></thead><tbody id="dailyRows"></tbody></table></div></section>
-      <p class="foot">Kata laluan hanya dihantar kepada API pada permintaan ini dan tidak disimpan dalam pelayar. Jumlah agregat kekal dalam Vercel Blob sehingga stor dipadam oleh pemilik. Jika fungsi statistik gagal, semakan format awam masih berjalan.</p>
+      <p class="foot">Kata laluan hanya dihantar kepada API pada permintaan ini dan tidak disimpan dalam pelayar. Data yang dipaparkan ialah sejarah sedia ada; jika fungsi statistik gagal, portal awam masih berjalan.</p>
     </section>
   </main>
   <script>

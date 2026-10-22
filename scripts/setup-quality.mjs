@@ -26,16 +26,26 @@ function intervalRows(data, interval) {
 }
 
 function isQualifiedFeed(data, now) {
-  if (!data || data.source !== 'ROBOFOREX_MT5' || data.dataSource !== 'ROBOFOREX_MT5_RAW_OHLC' || data.stale !== false) return false;
-  const quoteAge = finite(data.quoteAgeSeconds), heartbeatAge = finite(data.feedHeartbeatAgeSeconds);
-  if (quoteAge === null || heartbeatAge === null || quoteAge > MAX_FEED_AGE_SECONDS || heartbeatAge > MAX_FEED_AGE_SECONDS) return false;
+  if (!data || data.stale !== false) return false;
   const quote = finite(data.referencePrice);
   if (quote === null || quote <= 0) return false;
   const m1 = intervalRows(data, 'M1'), m15 = intervalRows(data, 'M15');
   const lastM1 = m1[m1.length - 1], lastM15 = m15[m15.length - 1];
   const m1Time = epochMs(lastM1?.t), m15Time = epochMs(lastM15?.t);
   if (m1Time === null || m15Time === null) return false;
-  return now - (m1Time + 60_000) <= 5 * 60_000 && now - (m15Time + M15_MS) <= 25 * 60_000;
+  const recentBars = now - (m1Time + 60_000) <= 5 * 60_000 && now - (m15Time + M15_MS) <= 25 * 60_000;
+  if (!recentBars) return false;
+
+  // Public Biquote candles may be used for explicitly-labelled research only.
+  // They are not broker quotes and do not authenticate the feed sender.
+  if (data.source === 'BIQUOTE' && data.dataSource === 'BIQUOTE_FREE_FALLBACK') {
+    const receivedAt = epochMs(data.receivedAt);
+    return receivedAt !== null && receivedAt <= now + 30_000 && now - receivedAt <= 5 * 60_000;
+  }
+
+  if (data.source !== 'RBFX_MT5' || data.dataSource !== 'RBFX_MT5_RAW_OHLC') return false;
+  const quoteAge = finite(data.quoteAgeSeconds), heartbeatAge = finite(data.feedHeartbeatAgeSeconds);
+  return quoteAge !== null && heartbeatAge !== null && quoteAge <= MAX_FEED_AGE_SECONDS && heartbeatAge <= MAX_FEED_AGE_SECONDS;
 }
 
 /** UTC M15 normalizer: round epoch to the bucket-open and merge repeated heartbeat rows. */
@@ -104,7 +114,7 @@ function setupItems(prices) {
 }
 
 /** Strict A+ M15 study from fresh MT5 OHLC. This is a study, not trade execution. */
-export function deriveM15Setup(data, now = Date.now()) {
+function deriveM15SetupCore(data, now = Date.now()) {
   if (!isQualifiedFeed(data, now)) return { status: noSetup(), items: [] };
   const rows = cleanClosedM15(intervalRows(data, 'M15'), now);
   if (rows.length < 34) return { status: noSetup('INSUFFICIENT', 'insufficient'), items: [] };
@@ -191,6 +201,20 @@ export function deriveM15Setup(data, now = Date.now()) {
       message: nearEntry ? 'VALID A+ SETUP — ACTIVE ENTRY ZONE.' : 'VALID A+ SETUP — WAIT FOR ENTRY RETRACEMENT.'
     }),
     items
+  };
+}
+
+export function deriveM15Setup(data, now = Date.now()) {
+  const result = deriveM15SetupCore(data, now);
+  if (data?.source !== 'BIQUOTE') return result;
+  const note = 'PUBLIC REFERENCE STUDY — NOT BROKER-VERIFIED.';
+  return {
+    ...result,
+    status: {
+      ...result.status,
+      sourceMode: 'PUBLIC_REFERENCE',
+      message: `${result.status?.message || SCANNING} · ${note}`
+    }
   };
 }
 

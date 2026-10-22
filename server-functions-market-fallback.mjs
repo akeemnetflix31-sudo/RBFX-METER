@@ -138,14 +138,14 @@ function summarize(asset, series, now) {
     bullishTimeframes: directional.bullish, bearishTimeframes: directional.bearish,
     timeframes, indicators,
     charts, levelsByTimeframe, bars: charts.M15, levels: levelsByTimeframe.M15,
-    dataSource: 'ROBOFOREX_MT5_RAW_OHLC', rawTimeframes: ['H1', 'M15', 'M5', 'M1']
+    dataSource: 'RBFX_MT5_RAW_OHLC', rawTimeframes: ['H1', 'M15', 'M5', 'M1']
   };
 }
 
 export function mt5InstrumentToMarket(asset, feed, now = Date.now()) {
   const instrument = feed?.instruments?.[asset];
   const receivedAt = Number(feed?.receivedAt);
-  if (!instrument || feed?.source !== 'ROBOFOREX_MT5' || !Number.isFinite(receivedAt) || receivedAt > now + 30_000 || now - receivedAt > 45 * 86400_000) return null;
+  if (!instrument || feed?.source !== 'RBFX_MT5' || !Number.isFinite(receivedAt) || receivedAt > now + 30_000 || now - receivedAt > 45 * 86400_000) return null;
   const cfg = ASSETS[asset];
   if (!cfg) return null;
   let m1, m5, m15, h1;
@@ -163,8 +163,8 @@ export function mt5InstrumentToMarket(asset, feed, now = Date.now()) {
   const latestM1Close = Number(m1.at(-1)?.t) + 60_000;
   const latestM15Close = Number(m15.at(-1)?.t) + 900_000;
   data.referencePrice = quoteAgeSeconds <= 180 ? bid : Number(m1.at(-1)?.c ?? null);
-  data.source = 'ROBOFOREX_MT5';
-  data.sourceLabel = 'RoboForex MT5';
+  data.source = 'RBFX_MT5';
+  data.sourceLabel = 'RBFX MT5';
   data.sourceSymbol = String(instrument.symbol || asset);
   data.quoteSide = 'BID';
   data.quoteAgeSeconds = quoteAgeSeconds;
@@ -248,7 +248,7 @@ export function biquoteBarsToMarket(asset, m1, m15, now = Date.now()) {
   data.quoteSide = 'CLOSE';
   data.receivedAt = lastM1.t + 60_000;
   data.latestM15CloseAt = lastM15.t + 900_000;
-  data.fallbackDisclaimer = 'Free public reference data for research; not a RoboForex quote and not broker-authenticated.';
+  data.fallbackDisclaimer = 'Free public reference data for research; not a broker quote and not broker-authenticated.';
   return data;
 }
 
@@ -325,7 +325,7 @@ export function createMarketHandler({ feedReader = readLatestMt5Feed, clock = ()
       if (fallback?.ok) return json(fallback);
     } catch { /* use any available stale MT5 snapshot before failing closed */ }
     if (mt5Market) return json(mt5Market);
-    return json({ ok: false, error: 'MARKET_DATA_UNAVAILABLE', sourcesTried: ['ROBOFOREX_MT5', 'BIQUOTE_FREE_FALLBACK'] }, 503);
+    return json({ ok: false, error: 'MARKET_DATA_UNAVAILABLE', sourcesTried: ['RBFX_MT5', 'BIQUOTE_FREE_FALLBACK'] }, 503);
   };
 }
 const handler = createMarketHandler();

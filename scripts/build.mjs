@@ -29,4 +29,4 @@ await build({
   format: 'iife',
   outfile: new URL('../public/setup-quality.bundle.js', import.meta.url).pathname
 });
-console.log('Portal build ready: bilingual UI, interactive candlestick chart, and fail-closed EA setup quality bundle in public/.');
+console.log('Portal build ready: bilingual UI, per-instance RAM feed, three-tier fallback, and A+ M15 study-only setup bundle in public/.');

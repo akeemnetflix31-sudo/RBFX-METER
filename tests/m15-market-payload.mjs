@@ -4,7 +4,7 @@ const M15=900_000, nowBase=1_800_000_000_000;
 function makeRows(step,count,baseClose=100,breakout=false){const rows=[];for(let i=0;i<count;i++){const t=nowBase+i*step;const row=breakout&&i===count-1?{t,o:100.5,h:103.5,l:100.4,c:103.3}:{t,o:baseClose,h:baseClose+1,l:baseClose-1,c:baseClose};for(const offset of [0,12_000,27_000])rows.push({...row,t:t+offset});}return rows;}
 const m15=makeRows(M15,40,100,true),last=m15.at(-1),now=last.t+M15+60_000;
 const timeframe={direction:'BULLISH'};
-const data={ok:true,asset:'XAUUSD',source:'ROBOFOREX_MT5',dataSource:'ROBOFOREX_MT5_RAW_OHLC',stale:false,quoteAgeSeconds:20,feedHeartbeatAgeSeconds:20,referencePrice:102.5,digits:2,
+const data={ok:true,asset:'XAUUSD',source:'RBFX_MT5',dataSource:'RBFX_MT5_RAW_OHLC',stale:false,quoteAgeSeconds:20,feedHeartbeatAgeSeconds:20,referencePrice:102.5,digits:2,
  charts:{M15:m15,M1:makeRows(60_000,50).map(x=>({...x,t:now-60_000})),M5:makeRows(300_000,50),H1:makeRows(3_600_000,40)},bars:m15,timeframes:{H1:timeframe,M15:timeframe,M5:timeframe,M1:timeframe},levelsByTimeframe:{M15:{state:'STUDY',items:[{label:'ENTRY',price:999}]}}};
 const result=normalizeMarketPayload(data,now);
 for(const [tf,step] of Object.entries({H1:3_600_000,M15:900_000,M5:300_000,M1:60_000})){

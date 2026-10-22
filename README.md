@@ -1,45 +1,42 @@
-# RBFX Meter — RoboForex Client Portal (Vercel)
+# RBFX Meter — RBFX Client Portal
 
-English / Bahasa Melayu Malaysia portal served as a Vercel static build with Vercel Node.js Functions. The market endpoint accepts only the read-only MT5 feed; the MT5 ingestion endpoint remains public and tokenless. Latest feed snapshots and anonymous daily format-check aggregates are stored in a **private Vercel Blob store**.
+Bilingual English / Bahasa Melayu Malaysia portal on Vercel. Market values and setups are software research output only. Public reference prices are not broker-authenticated and may differ from a broker quote. Static baselines are explicitly stale and never produce active setups.
 
-## API routes
+## Unified feed API
 
-- `POST /api/access` — checks for exactly eight numeric digits only. This is a syntax filter, not RoboForex account verification, authentication, membership validation, or proof of ownership.
-- `GET /api/market?asset=XAUUSD` — reads only the stored MT5 feed for the requested supported asset. Returns HTTP 503 when validated MT5 data is unavailable; there is no public market-price fallback. Returns H1/M15/M5/M1 indicators, OHLC, meter score, and reference levels.
-- `POST /api/mt5-feed` — public tokenless MT5 ingestion route. Validates payload size, symbol IDs, timestamps, and OHLC shape before writing the newest snapshot to private Vercel Blob storage. Anyone can still submit valid-shaped data and overwrite the feed; the payload is not cryptographically authenticated.
-- `GET /api/news` — high/medium-impact calendar events with visible FinanceCalendar attribution; tries a secondary public calendar source if the primary source is unavailable.
-- `GET /api/owner-stats` — optional owner dashboard API; requires `Authorization: Bearer <OWNER_STATS_PASSWORD>`, where the production secret must be at least 32 characters.
+`/api/feed` accepts both methods. Vercel rewrites `/api/market` and `/api/mt5-feed` to this same function so GET and POST can share a warm instance's RAM cache.
 
-## Vercel deployment requirements
+- `POST /api/mt5-feed` (also `/api/feed`) — validates the v1 EA payload and holds the latest complete batch in volatile RAM for at most 60 seconds. No Vercel Blob or durable database write occurs. A successful response reports `storage: IN_MEMORY_EPHEMERAL`.
+- `GET /api/market?asset=XAUUSD` (also `/api/feed?asset=XAUUSD`) — Tier 1 reads the fresh in-memory EA batch, Tier 2 fetches public no-key Biquote closed M1/M15 OHLC, Tier 3 returns one built-in baseline candle when both live tiers fail.
 
-1. Import this project into Vercel and set the project root to this folder. `vercel.json` runs `npm run build`, publishes `public/`, applies security headers, and routes the owner page.
-2. Attach a **private Vercel Blob store** to the project for Production (and Preview/Development if needed). Vercel's Blob SDK uses the connected store's OIDC environment automatically. Without the store connection, MT5 writes and market reads return unavailable errors.
-3. Set `OWNER_STATS_PASSWORD` to a unique secret of at least 32 characters only if the owner-stats feature is used. Do not place it in browser files, source control, or the deployment package.
-4. Build and test with `npm install`, `npm run build`, `npm test`, and `npm run check`.
-5. After obtaining the final Vercel domain, update the MT5 EA endpoint and allow that origin in MT5 WebRequest settings. The project includes a `YOUR-VERCEL-PROJECT.vercel.app` placeholder until the final domain is known.
-6. The new private Blob store starts empty. The MT5 EA must post a new payload to `/api/mt5-feed` before the market API can return current data. Existing provider-stored feed snapshots and owner secrets are not included in this source package.
+### Vercel RAM limitation
 
-## MT5 feed
+RAM belongs to one warm serverless instance only. Cold starts erase it; scaled instances do not share it; therefore an EA POST and a buyer GET may reach different instances. Tier 1 is best-effort, not a globally reliable stream. The public Biquote fallback compensates when a GET cannot see a live EA batch. A shared, reliable EA stream would require shared persistence or a network cache, which is deliberately not used in this RAM-only mode.
 
-The included `mt5/RBFXMeter_ReadOnlyFeed.mq5` is read-only: it sends closed M1/M5/M15/H1 bars and quotes, without trade execution functions. It synchronizes history and posts every 60 seconds. Incomplete M5/H1 series can be resampled from complete lower-timeframe groups. The feed is still public and unauthenticated; validation protects shape and timestamp integrity, not source authenticity. Treat the displayed prices as MT5-originated only after independently checking the running EA and matching terminal.
+### Fallback safety
 
-See [`MT5-FEED-SETUP.md`](MT5-FEED-SETUP.md) for the installation and verification steps. The site does not log in to a broker, look up account ownership, or place trades.
+- Biquote is used for free public OHLC across the supported FX, metal and crypto symbols; it is not a broker quote. Frankfurter is not used for metals or intraday candle reconstruction, and CoinGecko is not used for broker-equivalent M15 OHLC.
+- Tier 3 uses built-in reference values captured on 2026-10-22. It is labelled `STATIC BASELINE · NOT LIVE`, marked stale, shows only a single flat baseline candle, and has no indicators or active setup levels.
+- The A+ M15 thresholds, freshness checks, two-hour expiry, invalidation and no-chase logic are unchanged. Static/stale data cannot create an active setup.
+- Valid supported market requests fall back rather than return 503 when live tiers fail. Invalid asset values remain client errors; no system can promise that every API error or external provider failure disappears.
 
-## Data and analytics
+## Other API routes
 
-A submitted eight-digit value is not retained. If the format check passes, the application attempts to increment an anonymous daily aggregate; it stores date-level counts only, not account numbers, IP addresses, or stable visitor IDs. Vercel Blob does not provide atomic conditional object writes, so concurrent analytics increments are best-effort and may undercount during simultaneous updates. This does not affect access-format responses, MT5 feed validation, or market calculations. Owner statistics are at `/owner-stats` and are not linked from the portal.
+- `POST /api/access` checks exactly eight numeric digits. It does not authenticate/verify an account and does not persist account numbers, IPs or new analytics.
+- `GET /api/news` provides economic calendar data with attribution.
+- `GET /api/owner-stats` is an optional read-only view of historical anonymous aggregates that may still exist in Blob.
+
+## Vercel Blob
+
+Market/feed and access-check paths do not call Blob. `scripts/cleanup-unused-blob-cache.mjs` lists by default and only deletes stale cache/feed objects after an explicit confirmation; it preserves usage-history and unrelated namespaces. The Blob store may remain paused until its reset window; deleting objects does not reverse the already-counted monthly Advanced Operations.
 
 ## Build and test
 
 ```sh
-npm install
+npm ci --no-audit --no-fund
 npm run build
 npm test
 npm run check
 ```
 
-The app bundles Lightweight Charts locally; browser assets and API calls are same-origin. The chart displays timeframe-matched MT5 OHLC and indicators, with no runtime chart CDN. News remains the only API route that fetches external calendar providers. Review [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) and the included Lightweight Charts license notice.
-
-## Limitations
-
-The meter is for research and education only, not investment advice or a result guarantee. MT5 connection and feed freshness are not guaranteed. `/api/mt5-feed` is publicly writable and cannot prove that a valid-shaped payload came from RoboForex. The format check does not confirm that an account exists or belongs to a visitor. No order is sent or managed by this portal.
+`vercel.json` builds the UI and routes `/api/market` and `/api/mt5-feed` through `/api/feed`. The separate ICTMACROVIP project and `https://ictmacrovip.com/api/feed` endpoint are outside this repository and are not modified.

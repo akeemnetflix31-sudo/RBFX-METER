@@ -1,9 +1,9 @@
 #property strict
 #property version   "1.00"
-#property description "Read-only RoboForex MT5 OHLC/quote sender for the RBFX Meter Vercel endpoint. No trade functions."
+#property description "Read-only RBFX MT5 OHLC/quote sender for the RBFX Meter Vercel endpoint. No trade functions."
 
 // Configure the public Vercel endpoint locally in MT5.
-// No feed token or RoboForex password is sent. This public endpoint accepts writes from any internet client.
+// No feed token or RBFX Client Portal password is sent. This public endpoint accepts writes from any internet client.
 input string InpEndpoint = "https://YOUR-VERCEL-PROJECT.vercel.app/api/mt5-feed";
 input string InpPortalAssets = "XAUUSD,EURUSD,GBPUSD,USDJPY,USDCHF,USDCAD,AUDUSD,NZDUSD,BTCUSD,ETHUSD";
 input string InpBrokerSymbols = "XAUUSD,EURUSD,GBPUSD,USDJPY,USDCHF,USDCAD,AUDUSD,NZDUSD,BTCUSD,ETHUSD";

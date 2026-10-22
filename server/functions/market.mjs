@@ -1,5 +1,4 @@
-import { readLatestMt5Feed } from './mt5-feed-store.mjs';
-import { getStore } from './vercel-blob-store.mjs';
+// Per-instance RAM cache only; market data never uses persistent Blob storage.
 
 const ASSETS = {
   XAUUSD: { name: 'GOLD / XAU/USD', symbol: 'XAUUSD', digits: 2 },
@@ -138,14 +137,14 @@ function summarize(asset, series, now) {
     bullishTimeframes: directional.bullish, bearishTimeframes: directional.bearish,
     timeframes, indicators,
     charts, levelsByTimeframe, bars: charts.M15, levels: levelsByTimeframe.M15,
-    dataSource: 'ROBOFOREX_MT5_RAW_OHLC', rawTimeframes: ['H1', 'M15', 'M5', 'M1']
+    dataSource: 'RBFX_MT5_RAW_OHLC', rawTimeframes: ['H1', 'M15', 'M5', 'M1']
   };
 }
 
 export function mt5InstrumentToMarket(asset, feed, now = Date.now()) {
   const instrument = feed?.instruments?.[asset];
   const receivedAt = Number(feed?.receivedAt);
-  if (!instrument || feed?.source !== 'ROBOFOREX_MT5' || !Number.isFinite(receivedAt) || receivedAt > now + 30_000 || now - receivedAt > 45 * 86400_000) return null;
+  if (!instrument || feed?.source !== 'RBFX_MT5' || !Number.isFinite(receivedAt) || receivedAt > now + 30_000 || now - receivedAt > 45 * 86400_000) return null;
   const cfg = ASSETS[asset];
   if (!cfg) return null;
   let m1, m5, m15, h1;
@@ -163,8 +162,8 @@ export function mt5InstrumentToMarket(asset, feed, now = Date.now()) {
   const latestM1Close = Number(m1.at(-1)?.t) + 60_000;
   const latestM15Close = Number(m15.at(-1)?.t) + 900_000;
   data.referencePrice = quoteAgeSeconds <= 180 ? bid : Number(m1.at(-1)?.c ?? null);
-  data.source = 'ROBOFOREX_MT5';
-  data.sourceLabel = 'RoboForex MT5';
+  data.source = 'RBFX_MT5';
+  data.sourceLabel = 'RBFX MT5';
   data.sourceSymbol = String(instrument.symbol || asset);
   data.quoteSide = 'BID';
   data.quoteAgeSeconds = quoteAgeSeconds;
@@ -177,7 +176,6 @@ export function mt5InstrumentToMarket(asset, feed, now = Date.now()) {
 
 const PUBLIC_DATA_CACHE_TTL_MS = 60_000;
 const PUBLIC_DATA_CACHE_MAX_STALE_MS = 24 * 60 * 60_000;
-const publicDataStore = getStore('rbfxmeter-free-market-cache');
 const publicMemoryCache = new Map();
 const publicInFlight = new Map();
 
@@ -248,27 +246,16 @@ export function biquoteBarsToMarket(asset, m1, m15, now = Date.now()) {
   data.quoteSide = 'CLOSE';
   data.receivedAt = lastM1.t + 60_000;
   data.latestM15CloseAt = lastM15.t + 900_000;
-  data.fallbackDisclaimer = 'Free public reference data for research; not a RoboForex quote and not broker-authenticated.';
+  data.fallbackDisclaimer = 'Free public reference data for research; not a broker quote and not broker-authenticated.';
   return data;
 }
 
 async function readPublicCache(asset) {
-  const memory = publicMemoryCache.get(asset);
-  if (memory) return memory;
-  try {
-    const stored = await publicDataStore.get(`market/${asset}`, { type: 'json' });
-    if (stored?.data && Number.isFinite(Number(stored.fetchedAt))) {
-      publicMemoryCache.set(asset, stored);
-      return stored;
-    }
-  } catch { /* cache is optional; public fetch remains the primary fallback path */ }
-  return null;
+  return publicMemoryCache.get(asset) || null;
 }
 
 async function writePublicCache(asset, snapshot) {
   publicMemoryCache.set(asset, snapshot);
-  try { await publicDataStore.setJSON(`market/${asset}`, snapshot); }
-  catch { /* in-memory cache still reduces repeated calls in a warm function */ }
 }
 
 export async function loadBiquoteFallback(asset, now = Date.now()) {
@@ -299,6 +286,7 @@ export async function loadBiquoteFallback(asset, now = Date.now()) {
           sourceLabel: 'Biquote cached public reference data',
           dataSource: 'BIQUOTE_FREE_CACHE',
           fallbackCacheState: 'STALE_CACHE',
+          fallbackTier: 2,
           fallbackUnavailable: true
         };
       }
@@ -310,22 +298,66 @@ export async function loadBiquoteFallback(asset, now = Date.now()) {
   finally { publicInFlight.delete(asset); }
 }
 
-export function createMarketHandler({ feedReader = readLatestMt5Feed, clock = () => Date.now(), fallbackLoader = loadBiquoteFallback } = {}) {
+const STATIC_BASELINE_AT = Date.parse('2026-10-22T12:45:00Z');
+const STATIC_BASELINES = Object.freeze({
+  XAUUSD: 4081.15, EURUSD: 1.12032, GBPUSD: 1.337095, USDJPY: 157.1885,
+  USDCHF: 0.823555, USDCAD: 1.40372, AUDUSD: 0.70124, NZDUSD: 0.56757,
+  BTCUSD: 81662.83, ETHUSD: 2400.06
+});
+
+export function staticBaselineMarket(asset, now = Date.now()) {
+  const cfg = ASSETS[asset], price = STATIC_BASELINES[asset];
+  if (!cfg || !Number.isFinite(price)) return null;
+  const barAt = step => Math.floor((STATIC_BASELINE_AT - 1) / step) * step;
+  const one = step => [{ t: barAt(step), o: price, h: price, l: price, c: price }];
+  const charts = { H1: one(3_600_000), M15: one(900_000), M5: one(300_000), M1: one(60_000) };
+  const timeframes = Object.fromEntries(['H1', 'M15', 'M5', 'M1'].map(tf => [tf, {
+    direction: 'WARMING UP', label: 'Static baseline only · no live trend', rules: [false, false, false], score: null
+  }]));
+  const indicators = Object.fromEntries(['H1', 'M15', 'M5', 'M1'].map(tf => [tf, { ema12: null, ema26: null, rsi14: null, atr14: null }]));
+  const levelsByTimeframe = Object.fromEntries(['H1', 'M15', 'M5', 'M1'].map(tf => [tf, {
+    state: 'NO_SETUP', side: null, message: 'STATIC BASELINE · NO ACTIVE SETUP', items: []
+  }]));
+  return {
+    ok: true, access: 'PUBLIC_TERMINAL', asset, name: `ARAS ASAS STATIK / STATIC BASELINE · BUKAN LIVE / NOT LIVE · ${cfg.name}`, digits: cfg.digits,
+    referencePrice: price, ageMinutes: Math.max(0, Math.floor((now - STATIC_BASELINE_AT) / 60_000)), stale: true,
+    bias: 'MIXED', score: null, alignment: '0/0', activeTimeframes: 0, bullishTimeframes: 0, bearishTimeframes: 0,
+    timeframes, indicators, charts, levelsByTimeframe, bars: charts.M15, levels: [],
+    source: 'STATIC_BASELINE', sourceLabel: 'Built-in static baseline · not live', dataSource: 'STATIC_BASELINE',
+    receivedAt: STATIC_BASELINE_AT, fallbackTier: 3, isFallback: true, staticBaseline: true,
+    fallbackDisclaimer: 'Aras asas statik / static baseline only. Bukan data pasaran semasa; no indicators or active setup are inferred.'
+  };
+}
+
+export async function loadTieredFallback(asset, now = Date.now()) {
+  try { return await loadBiquoteFallback(asset, now); }
+  catch { return staticBaselineMarket(asset, now); }
+}
+
+export function createMarketHandler({ feedReader = null, clock = () => Date.now(), fallbackLoader = loadTieredFallback } = {}) {
   return async function handler(request) {
     if (request.method !== 'GET') return json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
     const url = new URL(request.url), asset = String(url.searchParams.get('asset') || 'XAUUSD').toUpperCase();
     if (!ASSETS[asset]) return json({ ok: false, error: 'ASSET_UNAVAILABLE' }, 400);
     const now = clock();
     let feed = null, mt5Market = null;
-    try { feed = await feedReader(); } catch { /* public reference fallback may still be available */ }
+    if (typeof feedReader === 'function') {
+      try { feed = await feedReader(); } catch { /* public reference fallback may still be available */ }
+    }
     mt5Market = mt5InstrumentToMarket(asset, feed, now);
-    if (mt5Market && !mt5Market.stale) return json(mt5Market);
+    if (mt5Market && !mt5Market.stale) {
+      mt5Market.fallbackTier = 1;
+      mt5Market.feedMode = 'IN_MEMORY_EPHEMERAL';
+      mt5Market.sourceLabel = 'EA Master · ephemeral RAM cache';
+      return json(mt5Market);
+    }
     try {
       const fallback = await fallbackLoader(asset, now);
       if (fallback?.ok) return json(fallback);
     } catch { /* use any available stale MT5 snapshot before failing closed */ }
     if (mt5Market) return json(mt5Market);
-    return json({ ok: false, error: 'MARKET_DATA_UNAVAILABLE', sourcesTried: ['ROBOFOREX_MT5', 'BIQUOTE_FREE_FALLBACK'] }, 503);
+    const baseline = staticBaselineMarket(asset, now);
+    return baseline ? json(baseline) : json({ ok: false, error: 'ASSET_UNAVAILABLE' }, 400);
   };
 }
 const handler = createMarketHandler();
