@@ -1,0 +1,19 @@
+{
+  "name": "rbfxmeter-vercel",
+  "version": "2.7.7",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node tests/setup-quality.mjs && node tests/m15-market-payload.mjs && node tests/functions.mjs",
+    "check": "node --check api/_shared.mjs && node --check api/access.mjs && node --check api/market.mjs && node --check api/mt5-feed.mjs && node --check api/news.mjs && node --check api/owner-stats.mjs"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.2",
+    "esbuild": "^0.28.2",
+    "lightweight-charts": "^5.2.1"
+  }
+}

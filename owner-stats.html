@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="color-scheme" content="dark">
+  <title>Owner Statistics · RBFX Meter</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07101c;--panel:#101f31;--line:#293c52;--text:#eef3f9;--muted:#9bacc0;--gold:#d8b56a;--green:#56d3a2;--red:#ff9cac}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -20%,#1b3047 0,transparent 55%),var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;padding:24px}
+    main{width:min(760px,100%)}.brand{color:var(--gold);font-size:11px;font-weight:850;letter-spacing:.2em;text-transform:uppercase}.card{margin-top:14px;padding:clamp(22px,5vw,38px);background:linear-gradient(145deg,#101f31,#0b1725);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 55px #0005}h1{font-size:clamp(24px,5vw,34px);line-height:1.15;margin:7px 0 8px;letter-spacing:-.035em}.sub{margin:0;color:var(--muted);font-size:13px}.notice{margin:20px 0;padding:13px 15px;border:1px solid #655536;background:#191a1a;border-radius:10px;color:#d9d2c1;font-size:12px}.notice strong{color:#f2d58e}.form{display:flex;gap:9px;margin-top:20px}.form input{flex:1;min-width:0;background:#07121e;border:1px solid #394d62;border-radius:9px;color:white;padding:12px 13px;font:inherit;outline:none}.form input:focus{border-color:var(--gold);box-shadow:0 0 0 3px #d8b56a22}.form button{border:1px solid #ebd18e;background:linear-gradient(130deg,#e4c77f,#cba654);color:#111b27;border-radius:9px;padding:11px 17px;font-weight:900;cursor:pointer}.form button:disabled{opacity:.55;cursor:wait}.status{min-height:24px;margin:9px 0 0;color:#e9c97b;font-size:12px}.status.error{color:var(--red)}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:23px}.metric{padding:16px;border:1px solid #293c52;border-radius:11px;background:#091522}.metric small{display:block;color:var(--muted);font-size:11px;min-height:34px}.metric strong{display:block;margin-top:8px;font-size:clamp(24px,5vw,36px);line-height:1.1;overflow-wrap:anywhere}.history{margin-top:22px}.history h2{font-size:13px;letter-spacing:.08em;margin:0 0 9px}.table-wrap{max-height:300px;overflow:auto;border:1px solid #293c52;border-radius:10px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{padding:9px 12px;text-align:left;border-bottom:1px solid #24364a}th{position:sticky;top:0;background:#101f31;color:#b9c7d5}td:last-child,th:last-child{text-align:right;font-variant-numeric:tabular-nums}.foot{color:#8294a8;font-size:11px;margin:18px 0 0}.hidden{display:none!important}
+    @media(max-width:560px){body{padding:15px}.form{flex-direction:column}.form button{min-height:45px}.stats{grid-template-columns:1fr}.metric{display:flex;justify-content:space-between;align-items:center;gap:14px}.metric small{min-height:0}.metric strong{margin:0;text-align:right}}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">RBFX Meter · Panel Pemilik</div>
+    <section class="card" aria-labelledby="title">
+      <h1 id="title">Statistik penggunaan</h1>
+      <p class="sub">Owner statistics · Ringkasan agregat format semakan sahaja</p>
+      <div class="notice"><strong>Privasi:</strong> Rekod statistik aplikasi hanya menyimpan bilangan semakan format harian. Nombor akaun, alamat IP, identiti unik dan senarai akaun aktif tidak disimpan dalam rekod ini. Semakan 8 digit/prefix bukan pengesahan akaun RoboForex sebenar. Pengiraan termasuk setiap semakan format diterima dan boleh merangkumi ulangan atau permintaan automatik.</div>
+      <form class="form" id="ownerForm">
+        <label class="hidden" for="secret">Rahsia pemilik</label>
+        <input id="secret" type="password" autocomplete="current-password" placeholder="Rahsia pemilik Vercel" required>
+        <button id="submit" type="submit">Lihat statistik</button>
+      </form>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <section class="stats hidden" id="stats" aria-live="polite">
+        <article class="metric"><small>Semakan format diterima hari ini (MYT)</small><strong id="today">—</strong></article>
+        <article class="metric"><small>Jumlah semakan format sepanjang masa</small><strong id="total">—</strong></article>
+        <article class="metric"><small>Hari yang mempunyai rekod</small><strong id="days">—</strong></article>
+      </section>
+      <section class="history hidden" id="history"><h2>Ringkasan harian · 30 hari terkini</h2><div class="table-wrap"><table><thead><tr><th>Tarikh (MYT)</th><th>Semakan format diterima</th></tr></thead><tbody id="dailyRows"></tbody></table></div></section>
+      <p class="foot">Kata laluan hanya dihantar kepada API pada permintaan ini dan tidak disimpan dalam pelayar. Jumlah agregat kekal dalam Vercel Blob sehingga stor dipadam oleh pemilik. Jika fungsi statistik gagal, semakan format awam masih berjalan.</p>
+    </section>
+  </main>
+  <script>
+    const form=document.getElementById('ownerForm'),secret=document.getElementById('secret'),button=document.getElementById('submit'),statusEl=document.getElementById('status'),stats=document.getElementById('stats'),historySection=document.getElementById('history');
+    const number=value=>new Intl.NumberFormat('ms-MY').format(value);
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();statusEl.textContent='Mengambil statistik…';statusEl.classList.remove('error');stats.classList.add('hidden');historySection.classList.add('hidden');button.disabled=true;
+      try{
+        const response=await fetch('/api/owner-stats',{method:'GET',headers:{Authorization:`Bearer ${secret.value}`},cache:'no-store'});
+        const data=await response.json();secret.value='';
+        if(response.status===401)throw new Error('Rahsia tidak tepat.');
+        if(response.status===503&&data.error==='OWNER_STATS_NOT_CONFIGURED')throw new Error('OWNER_STATS_PASSWORD belum ditetapkan dalam Vercel Environment Variables (minimum 32 aksara).');
+        if(!response.ok||!data.ok)throw new Error('Statistik tidak tersedia buat masa ini.');
+        document.getElementById('today').textContent=number(data.todayFormatChecks);
+        document.getElementById('total').textContent=number(data.totalFormatChecks);
+        document.getElementById('days').textContent=number(data.daysWithChecks);
+        const rows=(data.daily||[]).slice().reverse().map(row=>{const tr=document.createElement('tr');for(const value of [row.date,number(row.count)]){const td=document.createElement('td');td.textContent=value;tr.append(td)}return tr});
+        document.getElementById('dailyRows').replaceChildren(...rows);
+        statusEl.textContent=`Tarikh: ${data.date} · MYT`;
+        stats.classList.remove('hidden');
+        historySection.classList.remove('hidden');
+      }catch(error){statusEl.textContent=error.message||'Permintaan gagal.';statusEl.classList.add('error');}
+      finally{secret.value='';button.disabled=false;}
+    });
+  </script>
+</body>
+</html>
