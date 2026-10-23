@@ -12,6 +12,7 @@
     "check": "node --check api/_shared.mjs && node --check api/access.mjs && node --check api/feed.mjs && node --check server/functions/market-payload.mjs && node --check api/news.mjs && node --check api/owner-stats.mjs && node --check server/functions/feed-router.mjs && node --check server/functions/market.mjs && node --check server/functions/mt5-feed.mjs"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.2",
     "esbuild": "^0.28.2",
     "lightweight-charts": "^5.2.1"
   }

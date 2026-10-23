@@ -48,8 +48,8 @@ assert(cleaned.every(row => row.t % step === 0), 'all rows are aligned to UTC M1
 const valid = fixture();
 const active = deriveM15Setup(valid.data, valid.now);
 assert.equal(active.status.state, 'ACTIVE');
-assert.equal(active.status.quality, 'A+');
-assert.equal(active.status.message, 'VALID A+ SETUP — ACTIVE ENTRY ZONE.');
+assert.equal(active.status.quality, 'A');
+assert.equal(active.status.message, 'VALID A SETUP — ACTIVE ENTRY ZONE.');
 assert.deepEqual(active.items.map(item => item.label), ['ENTRY', 'SL', 'TP1', 'TP2', 'TP3']);
 assert.ok(active.status.expiresAt);
 
@@ -69,10 +69,13 @@ assert.equal(deriveM15Setup(threeOfFour.data, threeOfFour.now).status.state, 'AC
 
 const weakCandle = fixture({ weakCandle: true });
 assert.equal(deriveM15Setup(weakCandle.data, weakCandle.now).status.state, 'NO_SETUP');
+const moderateBreakout = fixture();
+moderateBreakout.data.charts.M15[39] = { ...moderateBreakout.data.charts.M15[39], o: 101, h: 103.5, l: 100.4, c: 102.3 };
+assert.equal(deriveM15Setup(moderateBreakout.data, moderateBreakout.now).status.state, 'ACTIVE', 'moderate but structured breakout passes relaxed candle/ATR criteria');
 const publicReference = fixture({ source: 'BIQUOTE' });
 const publicSetup = deriveM15Setup(publicReference.data, publicReference.now);
-assert.equal(publicSetup.status.state, 'ACTIVE', 'fresh public reference candles can generate study-only A+ setups');
-assert.equal(publicSetup.status.quality, 'A+');
+assert.equal(publicSetup.status.state, 'ACTIVE', 'fresh public reference candles can generate study-only setups');
+assert.equal(publicSetup.status.quality, 'A');
 assert.equal(publicSetup.status.sourceMode, 'PUBLIC_REFERENCE');
 assert.match(publicSetup.status.message, /NOT BROKER-VERIFIED/);
 assert.equal(publicSetup.items.length, 5);
@@ -103,7 +106,7 @@ const completed = deriveM15Setup(tp3.data, tp3.now);
 assert.equal(completed.status.state, 'EXPIRED');
 assert.equal(completed.items.length, 0, 'TP3 clears all lines');
 
-const late = fixture({ price: 103.2 });
+const late = fixture({ price: 103.4 });
 const lateSetup = deriveM15Setup(late.data, late.now);
 assert.equal(lateSetup.status.state, 'LATE');
 assert.equal(lateSetup.status.message, 'LATE TO CATCH UP — PRICE MOVED AWAY FROM ENTRY (WAIT PULLBACK / DO NOT CHASE).');
@@ -115,4 +118,4 @@ for (const asset of ['XAUUSD','EURUSD','GBPUSD','USDJPY','USDCHF','USDCAD','AUDU
   sample.data.asset = asset;
   assert.equal(deriveM15Setup(sample.data, sample.now).items.length, 5, `${asset} gets the same validated setup lifecycle`);
 }
-console.log('PASS: RBFX A+ gate, M15 bucket dedup, TP/SL/structure/expiry lifecycle, late-chase control, and ten-symbol fixture coverage.');
+console.log('PASS: RBFX A-grade gate, M15 bucket dedup, TP/SL/structure/expiry lifecycle, late-chase control, and ten-symbol fixture coverage.');

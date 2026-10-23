@@ -1,6 +1,12 @@
 const M15_MS = 15 * 60_000;
 const SETUP_TTL_MS = 2 * 60 * 60_000;
 const MAX_FEED_AGE_SECONDS = 180;
+const MIN_TF_ALIGNMENT = 2;
+const MIN_BODY_RATIO = 0.35;
+const MAX_CLOSE_FROM_EDGE_RATIO = 0.40;
+const MIN_BREAKOUT_ATR_MULTIPLE = 0.5;
+const MAX_BREAKOUT_ATR_MULTIPLE = 3.0;
+const LATE_ENTRY_R_THRESHOLD = 0.75;
 const REQUIRED_TIMEFRAMES = ['H1', 'M15', 'M5', 'M1'];
 const LEVEL_LABELS = ['ENTRY', 'SL', 'TP1', 'TP2', 'TP3'];
 const TP_WARNING = 'TP HIT — SECURE PROFIT / TRAIL SL TO BREAKEVEN.';
@@ -96,7 +102,7 @@ function findLatestBreakout(rows) {
 function hasTrendQuality(timeframes, side, confidence) {
   if (timeframes?.M15?.direction !== side) return false;
   const matches = REQUIRED_TIMEFRAMES.filter(tf => timeframes?.[tf]?.direction === side).length;
-  return matches >= 3 || confidence >= 80;
+  return matches >= MIN_TF_ALIGNMENT || confidence >= 80;
 }
 function buildStatus(state, labelKey, tone, extra = {}) {
   return { state, labelKey, tone, late: false, ...extra };
@@ -113,7 +119,7 @@ function setupItems(prices) {
   return LEVEL_LABELS.map((label, index) => ({ label, price: [prices.entry, prices.stop, prices.tp1, prices.tp2, prices.tp3][index] }));
 }
 
-/** Strict A+ M15 study from fresh MT5 OHLC. This is a study, not trade execution. */
+/** Rule-based M15 research setup from fresh eligible candles; not trade execution. */
 function deriveM15SetupCore(data, now = Date.now()) {
   if (!isQualifiedFeed(data, now)) return { status: noSetup(), items: [] };
   const rows = cleanClosedM15(intervalRows(data, 'M15'), now);
@@ -129,7 +135,8 @@ function deriveM15SetupCore(data, now = Date.now()) {
   const closeAtEdge = range > 0 ? (breakout.side === 'BULLISH' ? (bar.h - bar.c) / range : (bar.c - bar.l) / range) : Infinity;
   const confidence = finite(data.confidence ?? data.confidencePct ?? data.confidencePercentage) ?? 0;
   if (!Number.isFinite(range) || range <= 0 || !Number.isFinite(atr) || atr <= 0 ||
-      body / range < 0.45 || closeAtEdge > 0.35 || range < 0.75 * atr || range > 2.5 * atr ||
+      body / range < MIN_BODY_RATIO || closeAtEdge > MAX_CLOSE_FROM_EDGE_RATIO ||
+      range < MIN_BREAKOUT_ATR_MULTIPLE * atr || range > MAX_BREAKOUT_ATR_MULTIPLE * atr ||
       !hasTrendQuality(data.timeframes, breakout.side, confidence)) return { status: noSetup(), items: [] };
 
   const digits = Number.isInteger(Number(data.digits)) ? Math.max(0, Math.min(8, Number(data.digits))) : 2;
@@ -175,13 +182,13 @@ function deriveM15SetupCore(data, now = Date.now()) {
   if (targetHit >= 3) return { status: buildStatus('EXPIRED', 'setupHitTP3', 'expired', { expiresAt: expiry, message: `TP3 hit; old levels cleared. ${SCANNING}` }), items: [] };
 
   const progress = sign * (price - prices.entry) / Math.max(risk, Number.EPSILON);
-  const late = progress >= 0.5;
+  const late = progress >= LATE_ENTRY_R_THRESHOLD;
   const items = setupItems(prices);
   if (targetHit > 0) {
     return {
       status: buildStatus(`HIT_TP${targetHit}`, 'tpHitWarning', 'hit', {
         expiresAt: expiry, side: breakout.side, breakoutAt: new Date(openedAt + M15_MS).toISOString(),
-        quality: 'A+', tpHit: targetHit, late, warning: TP_WARNING, message: TP_WARNING
+        quality: 'A', tpHit: targetHit, late, warning: TP_WARNING, message: TP_WARNING
       }),
       items
     };
@@ -189,7 +196,7 @@ function deriveM15SetupCore(data, now = Date.now()) {
   if (late) {
     return {
       status: buildStatus('LATE', 'lateWarning', 'expired', {
-        late: true, expiresAt: expiry, side: breakout.side, quality: 'A+', warning: LATE_WARNING, message: LATE_WARNING
+        late: true, expiresAt: expiry, side: breakout.side, quality: 'A', warning: LATE_WARNING, message: LATE_WARNING
       }),
       items: []
     };
@@ -197,8 +204,8 @@ function deriveM15SetupCore(data, now = Date.now()) {
   const filled = progress >= 0, nearEntry = Math.abs(progress) < 0.5;
   return {
     status: buildStatus(filled ? 'ACTIVE' : 'PENDING', filled ? 'setupActive' : 'setupPending', filled ? 'active' : 'pending', {
-      expiresAt: expiry, side: breakout.side, breakoutAt: new Date(openedAt + M15_MS).toISOString(), quality: 'A+',
-      message: nearEntry ? 'VALID A+ SETUP — ACTIVE ENTRY ZONE.' : 'VALID A+ SETUP — WAIT FOR ENTRY RETRACEMENT.'
+      expiresAt: expiry, side: breakout.side, breakoutAt: new Date(openedAt + M15_MS).toISOString(), quality: 'A',
+      message: nearEntry ? 'VALID A SETUP — ACTIVE ENTRY ZONE.' : 'VALID A SETUP — WAIT FOR ENTRY RETRACEMENT.'
     }),
     items
   };

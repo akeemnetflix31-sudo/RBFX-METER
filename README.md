@@ -1,14 +1,14 @@
 # RBFX Client Portal
 
-Bilingual English / Bahasa Melayu Malaysia research portal. Market prices, candles, and indicator studies are accepted only from a validated direct EA Master MT5 payload. They are software research output, not independently broker-verified, investment advice, or trade instructions.
+Bilingual English / Bahasa Melayu Malaysia research portal for ten RBFX instruments. Prices, candles and indicator studies are research output, not independently broker-verified, investment advice or trade instructions. The API prioritizes a recent validated RBFX MT5 payload; if unavailable it can use an explicitly labelled Biquote public reference, then a clearly labelled static baseline that does not produce indicators or setup levels.
 
 ## Market-feed routes
 
 - `POST /api/mt5-feed` ingests a validated MT5 batch.
 - `GET /api/mt5-feed` returns the EA heartbeat status.
-- `GET /api/market?asset=XAUUSD` reads the latest batch from the same unified `/api/feed` route. `vercel.json` rewrites both endpoints into that single function route.
-- When no valid EA batch is visible in RAM, the market endpoint returns HTTP 503 with `WAITING_FOR_DIRECT_EA_MASTER_FEED`; the portal shows “Waiting for direct EA Master Feed...” and does not substitute another price/candle provider or static prices.
-- A valid batch expires from the RAM feed gate after 120 seconds. EA source status is `EA_MASTER_DIRECT_ONLY`; the raw ingestion contract remains `RBFX_MT5`.
+- `GET /api/market?asset=XAUUSD` reads a recent EA batch when visible in the same unified `/api/feed` route; `vercel.json` rewrites both ingestion and market paths to that function.
+- If a recent EA batch is unavailable, the market endpoint may return Biquote public reference candles, labelled `BIQUOTE_FREE_FALLBACK`; this is not a RoboForex quote and is not broker-authenticated. If public data is unavailable, it can return a static baseline, explicitly marked not live and without inferred indicators or setup levels.
+- A valid EA batch expires from the per-instance RAM priority window after 120 seconds. The raw ingestion contract remains `RBFX_MT5`. The UI displays the actual returned source and freshness instead of assuming an EA feed.
 
 ## Important Vercel RAM limitation
 
@@ -20,4 +20,4 @@ The economic-calendar endpoint is separate from market prices and does not suppl
 
 ## Build and tests
 
-Use `npm test`, `npm run check`, and `npm run build`. Tests verify route unification, RAM heartbeat/freshness, direct EA source marking, and fail-closed behavior when data is missing or expired.
+Use `npm test`, `npm run check`, and `npm run build`. Tests verify route unification, RAM heartbeat/freshness, actual source labels, and fail-closed setup behavior for stale or ineligible data. The M15 rules require a closed 20-bar breakout, ≥35% candle body, close in the outer 40%, 0.5×–3.0× ATR range, M15 alignment and 2/4 timeframe alignment (or ≥80% confidence). These thresholds are rule definitions, not backtested performance claims.

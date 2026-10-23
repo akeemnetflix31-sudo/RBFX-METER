@@ -13,9 +13,9 @@ for(const [tf,step] of Object.entries({H1:3_600_000,M15:900_000,M5:300_000,M1:60
  assert.equal(new Set(rows.map(row=>row.t)).size,rows.length,tf+' timestamps are unique');
 }
 assert.deepEqual(result.bars,result.charts.M15);
-assert.equal(result.levelsByTimeframe.M15.items.length,5,'qualified A+ output retains the five validated M15 study levels');
+assert.equal(result.levelsByTimeframe.M15.items.length,5,'qualified A-grade output retains the five validated M15 study levels');
 assert.equal(result.levelsByTimeframe.M15.state,'ACTIVE');
 const unaligned={...result,timeframes:{H1:{direction:'BEARISH'},M15:{direction:'BEARISH'},M5:{direction:'BEARISH'},M1:{direction:'BEARISH'}},charts:{...result.charts,M15:result.charts.M15},bars:result.bars};
 normalizeMarketPayload(unaligned,now);
 assert.equal(unaligned.levelsByTimeframe.M15.items.length,0,'unqualified/conflicting side cannot return drawable M15 levels');
-console.log('PASS: Vercel market API MTF payload bucket normalization and A+ M15 levels fail closed.');
+console.log('PASS: Vercel market API MTF payload bucket normalization and A-grade M15 levels fail closed.');
