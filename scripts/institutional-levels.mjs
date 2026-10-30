@@ -36,11 +36,12 @@ export function calculateInstitutionalLevels(candles, currentPrice, bias, timefr
   if (!(atr > 0)) return null;
   const round = value => Number(value.toFixed(digits));
   const sign = bias === 'BULLISH' ? 1 : -1;
-  const entry = round(price - sign * 0.382 * atr);
+  // SELL uses the actual bid/reference quote, never an ATR offset above the market.
+  // BUY keeps its bounded M15/H1 pullback study.
+  const entry = round(sign < 0 ? price : price - 0.382 * atr);
   const recent = rows.slice(-20);
-  // The optional H1 series provides wider context without requiring it for a valid M15 calculation.
-  const hour = closedRows(h1Candles, STEPS.H1, now).slice(-8);
-  const swingBars = recent.concat(hour);
+  // Swing and ATR must come from the selected timeframe, not an unrelated older H1 high.
+  const swingBars = recent;
   const swing = sign > 0 ? Math.min(...swingBars.map(row => row.l)) : Math.max(...swingBars.map(row => row.h));
   const minRisk = Math.max(1.5 * atr, 3 * 10 ** -digits);
   const structural = swing - sign * 0.2 * atr;

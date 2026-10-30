@@ -128,6 +128,8 @@ function deriveM15SetupCore(data, now = Date.now()) {
   if (rows.length < 34) return { status: noSetup('INSUFFICIENT', 'insufficient'), items: [] };
   const breakout = findLatestBreakout(rows);
   if (!breakout) return { status: noSetup(), items: [] };
+  if (['BULLISH', 'BEARISH', 'MIXED'].includes(data.bias) && data.bias !== breakout.side)
+    return { status: noSetup(), items: [] }; // match visible terminal trend
 
   const bar = rows[breakout.index], openedAt = bar.t, expiresAt = openedAt + M15_MS + SETUP_TTL_MS;
   const expiry = new Date(expiresAt).toISOString();
@@ -221,12 +223,13 @@ function deriveM15SetupCore(data, now = Date.now()) {
 
 // Indicative market-structure reference, never presented as an A-grade trade setup.
 // Only fresh, qualified EA candles are eligible; stale/missing data fail closed.
-export function deriveStructureReference(data, now = Date.now()) {
+export function deriveStructureReference(data, now = Date.now(), timeframe = 'M15') {
   if (data?.enableStructureReference !== true || !isQualifiedFeed(data, now) ||
       !['RBFX_MT5', 'BIQUOTE'].includes(data?.source)) return null;
-  const side = data.bias === 'BULLISH' || data.bias === 'BEARISH'
-    ? data.bias : data.timeframes?.M15?.direction;
-  const computed = calculateInstitutionalLevels(intervalRows(data, 'M15'), data.referencePrice, side, 'M15', {
+  // Never show a SELL reference against a mixed/bullish terminal bias.
+  const side = data.bias === 'BULLISH' || data.bias === 'BEARISH' ? data.bias : null;
+  const selected = timeframe === 'H1' ? 'H1' : 'M15';
+  const computed = calculateInstitutionalLevels(intervalRows(data, selected), data.referencePrice, side, selected, {
     h1Candles: intervalRows(data, 'H1'), digits: Number(data.digits), now
   });
   if (!computed) return null;
@@ -234,18 +237,20 @@ export function deriveStructureReference(data, now = Date.now()) {
     status: buildStatus('STRUCTURE_REFERENCE', 'noSetup', 'muted', {
       side, quality: 'INDICATIVE', sourceMode: data.source === 'BIQUOTE' ? 'PUBLIC_REFERENCE' : 'MT5_REFERENCE',
       message: data.source === 'BIQUOTE'
-        ? 'INDICATIVE PUBLIC M15/H1 STRUCTURE · NOT BROKER-VERIFIED OR A TRADE SIGNAL.'
-        : 'INDICATIVE EA M15/H1 STRUCTURE · NOT A VERIFIED SETUP OR TRADE SIGNAL.'
+        ? `INDICATIVE PUBLIC ${selected} STRUCTURE · NOT BROKER-VERIFIED OR A TRADE SIGNAL.`
+        : `INDICATIVE EA ${selected} STRUCTURE · NOT A VERIFIED SETUP OR TRADE SIGNAL.`
     }),
     items: computed.items
   };
 }
 
-export function deriveM15Setup(data, now = Date.now()) {
+export function deriveM15Setup(data, now = Date.now(), timeframe = 'M15') {
   const result = deriveM15SetupCore(data, now);
   // A reference is a separate, explicitly non-signal calculation; never call it quality A.
   // Keep valid A-grade levels whenever they exist; otherwise show a labelled reference.
-  const reference = !result.items.length ? deriveStructureReference(data, now) : null;
+  // H1 chart always carries H1-derived indicative levels (not M15 breakout coordinates).
+  const reference = (timeframe === 'H1' || !result.items.length) ? deriveStructureReference(data, now, timeframe) : null;
+  if (timeframe === 'H1' && !reference) return { status: noSetup(), items: [] };
   if (reference) return reference;
   if (data?.source !== 'BIQUOTE') return result;
   const note = 'PUBLIC REFERENCE STUDY — NOT BROKER-VERIFIED.';

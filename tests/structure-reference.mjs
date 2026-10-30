@@ -29,7 +29,7 @@ for (const [asset, [price, digits]] of Object.entries(assets)) {
     assert.deepEqual(result.items.map(item => item.label), ['ENTRY', 'SL', 'TP1', 'TP2', 'TP3']);
     const [entry, sl, tp1, tp2, tp3] = result.items.map(item => item.price);
     const sign = side === 'BULLISH' ? 1 : -1;
-    assert.ok(sign * (price - entry) > 0, `${asset}: entry must be a pullback, not market price`);
+    assert.ok(side === 'BEARISH' ? entry === Number(price.toFixed(digits)) : price > entry, `${asset}: SELL entry uses bid; BUY entry uses pullback`);
     assert.ok(Math.abs(entry - sl) + 10 ** -digits >= 1.5 * (2 * delta), `${asset}: minimum ATR risk`);
     assert.equal(Number(entry.toFixed(digits)),entry);
     assert.ok(sign * (entry - sl) > 0 && sign * (tp1 - entry) > 0);
@@ -42,6 +42,13 @@ for (const [asset, [price, digits]] of Object.entries(assets)) {
     assert.equal(normalized.levels.length, 5);
     assert.equal(normalized.levelPrices.entry, entry);
     assert.equal(normalized.levelPrices.tp3, tp3);
+    const h1Step = 3_600_000, lastH1 = Math.floor(now / h1Step) * h1Step - h1Step;
+    const h1 = Array.from({ length: 30 }, (_, i) => ({ t: lastH1 - (29 - i) * h1Step, o: price, h: price + delta * 3, l: price - delta * 3, c: price }));
+    const hourly = deriveM15Setup({ ...data, charts: { ...data.charts, H1: h1 } }, now, 'H1');
+    assert.equal(hourly.status.state, 'STRUCTURE_REFERENCE');
+    assert.ok(hourly.items[1].price !== sl, 'H1 ATR/stop must differ from M15');
+    assert.equal(hourly.items[0].price, side === 'BEARISH' ? entry : Number((price - .382 * 6 * delta).toFixed(digits)));
+    assert.deepEqual(deriveM15Setup({ ...data, bias: 'MIXED' }, now).items, [], 'mixed trend must not invent a SELL/BUY direction');
     const publicData = { ...data, source: 'BIQUOTE', dataSource: 'BIQUOTE_FREE_FALLBACK',
       receivedAt: now - 10_000 };
     const publicResult = deriveM15Setup(publicData, now);
