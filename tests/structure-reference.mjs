@@ -7,7 +7,7 @@ const now = Date.now();
 const last = Math.floor(now / step) * step - step;
 const assets = {
   XAUUSD: [3991, 2], EURUSD: [1.1189, 5], GBPUSD: [1.34, 5],
-  USDJPY: [153.1, 3], USDCHF: [0.8, 5], USDCAD: [1.39, 5],
+  USDJPY: [153.1, 2], USDCHF: [0.8, 5], USDCAD: [1.39, 5],
   AUDUSD: [0.68, 5], NZDUSD: [0.57, 5], BTCUSD: [83000, 2], ETHUSD: [2500, 2]
 };
 for (const [asset, [price, digits]] of Object.entries(assets)) {
@@ -29,11 +29,14 @@ for (const [asset, [price, digits]] of Object.entries(assets)) {
     assert.deepEqual(result.items.map(item => item.label), ['ENTRY', 'SL', 'TP1', 'TP2', 'TP3']);
     const [entry, sl, tp1, tp2, tp3] = result.items.map(item => item.price);
     const sign = side === 'BULLISH' ? 1 : -1;
+    assert.ok(sign * (price - entry) > 0, `${asset}: entry must be a pullback, not market price`);
+    assert.ok(Math.abs(entry - sl) + 10 ** -digits >= 1.5 * (2 * delta), `${asset}: minimum ATR risk`);
+    assert.equal(Number(entry.toFixed(digits)),entry);
     assert.ok(sign * (entry - sl) > 0 && sign * (tp1 - entry) > 0);
     const tick = 10 ** -digits;
-    assert.ok(Math.abs(tp1 - (entry + sign * Math.abs(entry - sl))) <= tick * 1.1);
-    assert.ok(Math.abs(tp2 - (entry + sign * 2 * Math.abs(entry - sl))) <= tick * 1.1);
-    assert.ok(Math.abs(tp3 - (entry + sign * 3 * Math.abs(entry - sl))) <= tick * 1.1);
+    assert.ok(Math.abs(tp1 - (entry + sign * 1.5 * Math.abs(entry - sl))) <= tick * 1.1);
+    assert.ok(Math.abs(tp2 - (entry + sign * 2.5 * Math.abs(entry - sl))) <= tick * 1.1);
+    assert.ok(Math.abs(tp3 - (entry + sign * 4 * Math.abs(entry - sl))) <= tick * 1.1);
     const normalized = normalizeMarketPayload(structuredClone(data), now);
     assert.equal(normalized.levelType, 'STRUCTURE_REFERENCE');
     assert.equal(normalized.levels.length, 5);

@@ -108,7 +108,7 @@ function buildStatus(state, labelKey, tone, extra = {}) {
   return { state, labelKey, tone, late: false, ...extra };
 }
 function marketLevels(entry, stop, risk, sign, round) {
-  const prices = { entry, stop, tp1: round(entry + sign * risk), tp2: round(entry + sign * risk * 2), tp3: round(entry + sign * risk * 3) };
+  const prices = { entry, stop, tp1: round(entry + sign * risk * 1.5), tp2: round(entry + sign * risk * 2.5), tp3: round(entry + sign * risk * 4) };
   const values = [prices.entry, prices.stop, prices.tp1, prices.tp2, prices.tp3];
   if (values.some(value => !Number.isFinite(value) || value <= 0) || new Set(values).size !== values.length) return null;
   if (sign > 0 ? !(prices.stop < prices.entry && prices.tp1 > prices.entry && prices.tp2 > prices.tp1 && prices.tp3 > prices.tp2)
@@ -142,8 +142,14 @@ function deriveM15SetupCore(data, now = Date.now()) {
   const digits = Number.isInteger(Number(data.digits)) ? Math.max(0, Math.min(8, Number(data.digits))) : 2;
   const round = value => Number(value.toFixed(digits));
   const sign = breakout.side === 'BULLISH' ? 1 : -1;
+  // Anchor verified breakout entries to the closed momentum candle; do not move
+  // old targets whenever the live quote changes (that would break TP lifecycle).
   const entry = round((bar.h + bar.l) / 2);
-  const stop = round(sign > 0 ? bar.l - 0.1 * atr : bar.h + 0.1 * atr);
+  const swing = sign > 0 ? Math.min(...rows.slice(-20).map(row => row.l))
+                         : Math.max(...rows.slice(-20).map(row => row.h));
+  const structureStop = swing - sign * 0.2 * atr;
+  const stop = round(sign > 0 ? Math.min(structureStop, entry - 1.5 * atr)
+                                 : Math.max(structureStop, entry + 1.5 * atr));
   const risk = Math.abs(entry - stop);
   if (!(risk > 0)) return { status: noSetup(), items: [] };
   const prices = marketLevels(entry, stop, risk, sign, round);
@@ -233,13 +239,16 @@ export function deriveStructureReference(data, now = Date.now()) {
   const round = value => Number(value.toFixed(digits));
   const tick = 10 ** -digits;
   const sign = side === 'BULLISH' ? 1 : -1;
-  const entry = round(price);
+  // Indicative retracement zone, not the current market price.
+  const entry = round(price - sign * 0.382 * atr);
   const candidates = [...recent, ...h1].map(row => finite(sign > 0 ? row.l : row.h))
     .filter(value => value !== null && (sign > 0 ? value < entry : value > entry));
   if (!candidates.length) return null;
-  const nearest = sign > 0 ? Math.max(...candidates) : Math.min(...candidates);
-  const minimumRisk = Math.max(atr * 0.6, tick * 3);
-  const structureStop = nearest - sign * atr * 0.1;
+  const minimumRisk = Math.max(atr * 1.5, tick * 3);
+  // Use the full recent swing extreme, not the nearest micro-candle wick.
+  const swing = sign > 0 ? Math.min(...recent.map(row => row.l))
+                         : Math.max(...recent.map(row => row.h));
+  const structureStop = swing - sign * atr * 0.2;
   const stop = round(sign > 0 ? Math.min(structureStop, entry - minimumRisk)
                                  : Math.max(structureStop, entry + minimumRisk));
   const risk = Math.abs(entry - stop);

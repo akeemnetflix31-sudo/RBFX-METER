@@ -4,7 +4,7 @@ const ASSETS = {
   XAUUSD: { name: 'GOLD / XAU/USD', symbol: 'XAUUSD', digits: 2 },
   EURUSD: { name: 'EUR/USD', symbol: 'EURUSD', digits: 5 },
   GBPUSD: { name: 'GBP/USD', symbol: 'GBPUSD', digits: 5 },
-  USDJPY: { name: 'USD/JPY', symbol: 'USDJPY', digits: 3 },
+  USDJPY: { name: 'USD/JPY', symbol: 'USDJPY', digits: 2 },
   USDCHF: { name: 'USD/CHF', symbol: 'USDCHF', digits: 5 },
   USDCAD: { name: 'USD/CAD', symbol: 'USDCAD', digits: 5 },
   AUDUSD: { name: 'AUD/USD', symbol: 'AUDUSD', digits: 5 },

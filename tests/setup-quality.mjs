@@ -96,17 +96,17 @@ const stopped = fixture({ price: 100 });
 assert.equal(deriveM15Setup(stopped.data, stopped.now).status.state, 'INVALIDATED');
 assert.deepEqual(deriveM15Setup(stopped.data, stopped.now).items, []);
 
-const reachedTarget = fixture({ price: 104 });
+const reachedTarget = fixture({ price: 108 });
 const tp1 = deriveM15Setup(reachedTarget.data, reachedTarget.now);
 assert.equal(tp1.status.state, 'HIT_TP1');
 assert.equal(tp1.status.message, 'TP HIT — SECURE PROFIT / TRAIL SL TO BREAKEVEN.');
 assert.equal(tp1.items.length, 5, 'TP1/TP2 events retain lines until TP3 or invalidation');
-const tp3 = fixture({ price: 110 });
+const tp3 = fixture({ price: 120 });
 const completed = deriveM15Setup(tp3.data, tp3.now);
 assert.equal(completed.status.state, 'EXPIRED');
 assert.equal(completed.items.length, 0, 'TP3 clears all lines');
 
-const late = fixture({ price: 103.4 });
+const late = fixture({ price: 105.4 });
 const lateSetup = deriveM15Setup(late.data, late.now);
 assert.equal(lateSetup.status.state, 'LATE');
 assert.equal(lateSetup.status.message, 'LATE TO CATCH UP — PRICE MOVED AWAY FROM ENTRY (WAIT PULLBACK / DO NOT CHASE).');
