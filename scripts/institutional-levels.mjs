@@ -22,14 +22,17 @@ export function calculateInstitutionalLevels(candles, currentPrice, bias, timefr
   if (!step || !(price > 0) || !['BULLISH', 'BEARISH'].includes(bias) ||
       !Number.isInteger(digits) || digits < 0 || digits > 8) return null;
   const rows = closedRows(candles, step, now);
-  if (rows.length < 20 || rows.at(-1).t + step < now - (timeframe === 'M15' ? 25 * 60_000 : 90 * 60_000)) return null;
+  if (!rows.length || rows.at(-1).t + step < now - (timeframe === 'M15' ? 25 * 60_000 : 90 * 60_000)) return null;
   const ranges = [];
-  for (let i = rows.length - 14; i < rows.length; i++) {
+  for (let i = Math.max(1, rows.length - 14); i < rows.length; i++) {
     const row = rows[i], previous = rows[i - 1];
     if (!previous) return null;
     ranges.push(Math.max(row.h - row.l, Math.abs(row.h - previous.c), Math.abs(row.l - previous.c)));
   }
-  const atr = ranges.reduce((sum, value) => sum + value, 0) / 14;
+  // With fewer than 15 closed bars, use their observed range; never synthesize a quote.
+  const recentRange = rows.slice(-20).reduce((max, row) => Math.max(max, row.h - row.l), 0);
+  const atr = ranges.length && ranges.some(value => value > 0)
+    ? ranges.reduce((sum, value) => sum + value, 0) / ranges.length : recentRange;
   if (!(atr > 0)) return null;
   const round = value => Number(value.toFixed(digits));
   const sign = bias === 'BULLISH' ? 1 : -1;
