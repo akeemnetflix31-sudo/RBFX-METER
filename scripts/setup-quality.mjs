@@ -1,3 +1,5 @@
+import { calculateInstitutionalLevels } from './institutional-levels.mjs';
+
 const M15_MS = 15 * 60_000;
 const SETUP_TTL_MS = 2 * 60 * 60_000;
 const MAX_FEED_AGE_SECONDS = 180;
@@ -222,38 +224,12 @@ function deriveM15SetupCore(data, now = Date.now()) {
 export function deriveStructureReference(data, now = Date.now()) {
   if (data?.enableStructureReference !== true || !isQualifiedFeed(data, now) ||
       !['RBFX_MT5', 'BIQUOTE'].includes(data?.source)) return null;
-  const m15 = cleanClosedM15(intervalRows(data, 'M15'), now);
-  const h1 = (Array.isArray(intervalRows(data, 'H1')) ? intervalRows(data, 'H1') : [])
-    .filter(row => Number.isFinite(epochMs(row?.t)) && epochMs(row.t) + 3_600_000 <= now &&
-      [row?.h, row?.l].every(value => finite(value) !== null && finite(value) > 0))
-    .slice(-8);
-  if (m15.length < 20) return null;
-  const recent = m15.slice(-20);
-  const atr = atrAt(m15, m15.length - 1);
-  const price = finite(data.referencePrice);
   const side = data.bias === 'BULLISH' || data.bias === 'BEARISH'
     ? data.bias : data.timeframes?.M15?.direction;
-  if (!Number.isFinite(atr) || atr <= 0 || price === null || price <= 0 ||
-      !['BULLISH', 'BEARISH'].includes(side)) return null;
-  const digits = Number.isInteger(Number(data.digits)) ? Math.max(0, Math.min(8, Number(data.digits))) : 2;
-  const round = value => Number(value.toFixed(digits));
-  const tick = 10 ** -digits;
-  const sign = side === 'BULLISH' ? 1 : -1;
-  // Indicative retracement zone, not the current market price.
-  const entry = round(price - sign * 0.382 * atr);
-  const candidates = [...recent, ...h1].map(row => finite(sign > 0 ? row.l : row.h))
-    .filter(value => value !== null && (sign > 0 ? value < entry : value > entry));
-  if (!candidates.length) return null;
-  const minimumRisk = Math.max(atr * 1.5, tick * 3);
-  // Use the full recent swing extreme, not the nearest micro-candle wick.
-  const swing = sign > 0 ? Math.min(...recent.map(row => row.l))
-                         : Math.max(...recent.map(row => row.h));
-  const structureStop = swing - sign * atr * 0.2;
-  const stop = round(sign > 0 ? Math.min(structureStop, entry - minimumRisk)
-                                 : Math.max(structureStop, entry + minimumRisk));
-  const risk = Math.abs(entry - stop);
-  const prices = marketLevels(entry, stop, risk, sign, round);
-  if (!prices) return null;
+  const computed = calculateInstitutionalLevels(intervalRows(data, 'M15'), data.referencePrice, side, 'M15', {
+    h1Candles: intervalRows(data, 'H1'), digits: Number(data.digits), now
+  });
+  if (!computed) return null;
   return {
     status: buildStatus('STRUCTURE_REFERENCE', 'noSetup', 'muted', {
       side, quality: 'INDICATIVE', sourceMode: data.source === 'BIQUOTE' ? 'PUBLIC_REFERENCE' : 'MT5_REFERENCE',
@@ -261,7 +237,7 @@ export function deriveStructureReference(data, now = Date.now()) {
         ? 'INDICATIVE PUBLIC M15/H1 STRUCTURE · NOT BROKER-VERIFIED OR A TRADE SIGNAL.'
         : 'INDICATIVE EA M15/H1 STRUCTURE · NOT A VERIFIED SETUP OR TRADE SIGNAL.'
     }),
-    items: setupItems(prices)
+    items: computed.items
   };
 }
 
