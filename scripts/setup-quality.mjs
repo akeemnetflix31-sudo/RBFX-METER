@@ -214,7 +214,8 @@ function deriveM15SetupCore(data, now = Date.now()) {
 // Indicative market-structure reference, never presented as an A-grade trade setup.
 // Only fresh, qualified EA candles are eligible; stale/missing data fail closed.
 export function deriveStructureReference(data, now = Date.now()) {
-  if (data?.enableStructureReference !== true || !isQualifiedFeed(data, now) || data?.source !== 'RBFX_MT5') return null;
+  if (data?.enableStructureReference !== true || !isQualifiedFeed(data, now) ||
+      !['RBFX_MT5', 'BIQUOTE'].includes(data?.source)) return null;
   const m15 = cleanClosedM15(intervalRows(data, 'M15'), now);
   const h1 = (Array.isArray(intervalRows(data, 'H1')) ? intervalRows(data, 'H1') : [])
     .filter(row => Number.isFinite(epochMs(row?.t)) && epochMs(row.t) + 3_600_000 <= now &&
@@ -246,8 +247,10 @@ export function deriveStructureReference(data, now = Date.now()) {
   if (!prices) return null;
   return {
     status: buildStatus('STRUCTURE_REFERENCE', 'noSetup', 'muted', {
-      side, quality: 'INDICATIVE', sourceMode: 'MT5_REFERENCE',
-      message: 'INDICATIVE M15/H1 STRUCTURE · NOT A VERIFIED SETUP OR TRADE SIGNAL.'
+      side, quality: 'INDICATIVE', sourceMode: data.source === 'BIQUOTE' ? 'PUBLIC_REFERENCE' : 'MT5_REFERENCE',
+      message: data.source === 'BIQUOTE'
+        ? 'INDICATIVE PUBLIC M15/H1 STRUCTURE · NOT BROKER-VERIFIED OR A TRADE SIGNAL.'
+        : 'INDICATIVE EA M15/H1 STRUCTURE · NOT A VERIFIED SETUP OR TRADE SIGNAL.'
     }),
     items: setupItems(prices)
   };
@@ -255,9 +258,9 @@ export function deriveStructureReference(data, now = Date.now()) {
 
 export function deriveM15Setup(data, now = Date.now()) {
   const result = deriveM15SetupCore(data, now);
-  // Invalidated, late, expired and completed setups must not be replaced by a new signal.
-  const reference = ['NO_SETUP', 'INSUFFICIENT'].includes(result.status?.state) && !result.items.length
-    ? deriveStructureReference(data, now) : null;
+  // A reference is a separate, explicitly non-signal calculation; never call it quality A.
+  // Keep valid A-grade levels whenever they exist; otherwise show a labelled reference.
+  const reference = !result.items.length ? deriveStructureReference(data, now) : null;
   if (reference) return reference;
   if (data?.source !== 'BIQUOTE') return result;
   const note = 'PUBLIC REFERENCE STUDY — NOT BROKER-VERIFIED.';

@@ -60,7 +60,7 @@ async function normalizedMarketResponse(request, context) {
   if (!response.ok || !data || typeof data !== 'object' || !data.ok) {
     return new Response(JSON.stringify(data), { status: response.status, statusText: response.statusText, headers: response.headers });
   }
-  data.enableStructureReference = data.source === 'RBFX_MT5' && data.stale === false;
+  data.enableStructureReference = ['RBFX_MT5', 'BIQUOTE'].includes(data.source) && data.stale === false;
   normalizeMarketPayload(data, Date.now());
   return new Response(JSON.stringify(data), { status: response.status, statusText: response.statusText, headers: response.headers });
 }

@@ -39,6 +39,12 @@ for (const [asset, [price, digits]] of Object.entries(assets)) {
     assert.equal(normalized.levels.length, 5);
     assert.equal(normalized.levelPrices.entry, entry);
     assert.equal(normalized.levelPrices.tp3, tp3);
+    const publicData = { ...data, source: 'BIQUOTE', dataSource: 'BIQUOTE_FREE_FALLBACK',
+      receivedAt: now - 10_000 };
+    const publicResult = deriveM15Setup(publicData, now);
+    assert.equal(publicResult.status.sourceMode, 'PUBLIC_REFERENCE');
+    assert.equal(publicResult.items.length, 5);
+    assert.match(publicResult.status.message, /NOT BROKER-VERIFIED/);
     data.stale = true;
     assert.deepEqual(deriveM15Setup(data, now).items, [], 'stale feed cannot create levels');
   }
