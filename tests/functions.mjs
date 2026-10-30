@@ -87,7 +87,7 @@ assert.equal(ramStatus.instrumentCount, 1);
 assert.deepEqual(ramStatus.acceptedInstruments, ['XAUUSD']);
 assert.equal(ramStatus.storage, 'IN_MEMORY_EPHEMERAL');
 assert.equal(ramStatus.cacheScope, 'THIS_WARM_VERCEL_INSTANCE_ONLY');
-assert.equal(RAM_FEED_TTL_MS, 120_000);
+assert.equal(RAM_FEED_TTL_MS, 60_000);
 const ramMarket = await feedRouter(new Request('https://example.test/api/market?asset=XAUUSD'));
 assert.equal(ramMarket.status, 200);
 const ramMarketData = await ramMarket.json();
@@ -104,11 +104,11 @@ const recentEaData = await recentEaResponse.json();
 assert.equal(recentEaData.source, 'RBFX_MT5');
 assert.equal(recentEaData.stale, true);
 assert.equal(fallbackCalledForRecentEa, false);
-const oldFeed = { ...latestFeed, receivedAt: now - 121_000 };
+const oldFeed = { ...latestFeed, receivedAt: now - 61_000 };
 const expiredEaMarket = createMarketHandler({ feedReader: async () => oldFeed, fallbackLoader: async () => ({ ok: true, source: 'BIQUOTE' }), clock: () => now });
 assert.equal((await (await expiredEaMarket(new Request('https://example.test/api/market?asset=XAUUSD'))).json()).source, 'BIQUOTE');
 const originalDateNow = Date.now;
-Date.now = () => originalDateNow() + 121_000;
+Date.now = () => originalDateNow() + 61_000;
 assert.equal(await readFreshRamFeed(), null);
 assert.equal(feedHeartbeatStatus().connected, false);
 Date.now = originalDateNow;
@@ -172,4 +172,4 @@ async function scan(dir) {
   }
 }
 await scan(resolve(projectRoot.pathname));
-console.log('PASS: 120-second EA priority, shared API route wiring, per-instance heartbeat, and fallback behavior.');
+console.log('PASS: 60-second EA priority, shared API route wiring, per-instance heartbeat, and fallback behavior.');

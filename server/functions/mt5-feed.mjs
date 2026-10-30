@@ -31,16 +31,45 @@ function cleanBars(value, interval, now) {
   return rows;
 }
 
+function normalizeAsset(value) {
+  const raw = String(value || '').toUpperCase().trim();
+  const compact = raw.replace(/[^A-Z0-9]/g, '');
+  const aliases = { GOLD: 'XAUUSD', GOLDUSD: 'XAUUSD', XBTUSD: 'BTCUSD' };
+  const base = Object.keys(aliases).find(key => compact === key || (compact.startsWith(key) && compact.length > key.length));
+  if (base) return aliases[base];
+  // Longest canonical prefix wins; never strip every non-letter (XAUUSD.m -> XAUUSDM).
+  return [...ALLOWED_ASSETS].sort((a, b) => b.length - a.length).find(asset => compact.startsWith(asset)) || null;
+}
+
+function resampleClosedBars(source, sourceStep, targetStep, now) {
+  if (!Array.isArray(source)) return null;
+  const ratio = targetStep / sourceStep, groups = new Map();
+  for (const bar of source) {
+    const start = Math.floor(bar.t / targetStep) * targetStep;
+    if (!groups.has(start)) groups.set(start, []);
+    groups.get(start).push(bar);
+  }
+  const result = [];
+  for (const [start, rows] of groups) {
+    rows.sort((a, b) => a.t - b.t);
+    if (rows.length !== ratio || start + targetStep > now ||
+        rows.some((row, i) => row.t !== start + i * sourceStep)) continue;
+    result.push({ t: start, o: rows[0].o, h: Math.max(...rows.map(row => row.h)),
+      l: Math.min(...rows.map(row => row.l)), c: rows.at(-1).c });
+  }
+  return result.sort((a, b) => a.t - b.t).slice(-MAX_BARS);
+}
+
 function cleanInstrument(value, now) {
-  const asset = String(value?.asset || '').toUpperCase();
   const symbol = String(value?.symbol || '').trim();
-  if (!ALLOWED_ASSETS.has(asset) || !symbol || symbol.length > 48) return null;
+  const asset = normalizeAsset(value?.asset || symbol);
+  if (!asset || !symbol || symbol.length > 48) return null;
   const bid = Number(value?.quote?.bid), ask = Number(value?.quote?.ask), quoteAt = Number(value?.quote?.t);
   if (![bid, ask, quoteAt].every(Number.isFinite) || !Number.isSafeInteger(quoteAt) || bid <= 0 || ask < bid || quoteAt < now - 45 * 86400_000 || quoteAt > now + 120_000) return null;
   const m1 = cleanBars(value?.m1, 'M1', now);
-  const m5 = cleanBars(value?.m5, 'M5', now);
   const m15 = cleanBars(value?.m15, 'M15', now);
-  const h1 = cleanBars(value?.h1, 'H1', now);
+  const m5 = cleanBars(value?.m5, 'M5', now) || (m1 && cleanBars(resampleClosedBars(m1, 60_000, 300_000, now), 'M5', now));
+  const h1 = cleanBars(value?.h1, 'H1', now) || (m15 && cleanBars(resampleClosedBars(m15, 900_000, 3_600_000, now), 'H1', now));
   if (!m1 || !m5 || !m15 || !h1) return null;
   return { asset, symbol, quote: { bid, ask, t: quoteAt }, m1, m5, m15, h1 };
 }
@@ -79,8 +108,9 @@ export function createMt5FeedHandler({ storeFactory = defaultMemoryStoreFactory,
     const feed = { version: 1, source: 'RBFX_MT5', receivedAt: now, instruments };
     try { await storeFactory().setJSON('latest', feed); }
     catch { return json({ ok: false, error: 'FEED_STORE_UNAVAILABLE' }, 503); }
-    return json({ ok: true, source: feed.source, storage: storageMode, receivedAt: now, accepted: Object.keys(instruments) });
+    return json({ ok: true, success: true, stored: true, source: feed.source, storage: storageMode, receivedAt: now, symbol: Object.keys(instruments).length === 1 ? Object.keys(instruments)[0] : null, accepted: Object.keys(instruments) });
   };
 }
 
 export default createMt5FeedHandler();
+export { normalizeAsset };

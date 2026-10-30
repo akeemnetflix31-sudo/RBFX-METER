@@ -6,7 +6,7 @@ import { createMt5FeedHandler } from './mt5-feed.mjs';
 // function so a warm instance can share its most recent validated batch.
 let latestFeed = null;
 let latestFeedStoredAt = 0;
-const RAM_FEED_TTL_MS = 120_000;
+const RAM_FEED_TTL_MS = 60_000;
 
 const memoryStoreFactory = () => ({
   async setJSON(key, value) {
@@ -18,14 +18,14 @@ const memoryStoreFactory = () => ({
 });
 
 async function readFreshRamFeed() {
-  if (!latestFeed || Date.now() - latestFeedStoredAt > RAM_FEED_TTL_MS) return null;
+  if (!latestFeed || Date.now() - latestFeedStoredAt >= RAM_FEED_TTL_MS) return null;
   return latestFeed;
 }
 
 function feedHeartbeatStatus(now = Date.now()) {
   const hasFeed = Boolean(latestFeed);
   const ageMs = hasFeed ? Math.max(0, now - latestFeedStoredAt) : null;
-  const fresh = ageMs !== null && ageMs <= RAM_FEED_TTL_MS;
+  const fresh = ageMs !== null && ageMs < RAM_FEED_TTL_MS;
   const assets = Object.keys(latestFeed?.instruments || {});
   return {
     ok: true,

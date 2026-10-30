@@ -347,7 +347,7 @@ export function createMarketHandler({ feedReader = null, clock = () => Date.now(
     mt5Market = mt5InstrumentToMarket(asset, feed, now);
     const receivedAt = Number(feed?.receivedAt);
     const eaPayloadFresh = feed?.source === 'RBFX_MT5' && Number.isFinite(receivedAt) &&
-      receivedAt <= now + 30_000 && now - receivedAt <= 120_000;
+      receivedAt <= now + 30_000 && now - receivedAt < 60_000;
     // A valid, recent EA batch for this instrument has absolute priority, even if
     // individual quotes/candles are stale. Keep its stale state visible; never mask it
     // with public data during the 2-minute heartbeat window.
