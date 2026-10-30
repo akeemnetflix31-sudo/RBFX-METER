@@ -28,11 +28,16 @@ export function vercelHandler(handler) {
       response.headers.forEach((value, name) => res.setHeader(name, value));
       if (method === 'HEAD' || response.status === 204 || response.status === 304) return res.end();
       return res.end(Buffer.from(await response.arrayBuffer()));
-    } catch {
-      res.statusCode = 500;
+    } catch (error) {
+      // Some Vercel runtimes parse application/json while exposing req.body.
+      // A malformed client body must be a 400, never an INTERNAL_ERROR 500.
+      const isJson = /^application\/(?:[\w.-]+\+)?json\b/i.test(String(req.headers?.['content-type'] || ''));
+      const invalidJson = isJson && (error instanceof SyntaxError ||
+        /(?:unexpected token|unexpected end of json|json parse|not valid json)/i.test(String(error?.message || '')));
+      res.statusCode = invalidJson ? 400 : 500;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
-      return res.end(JSON.stringify({ ok: false, error: 'INTERNAL_ERROR' }));
+      return res.end(JSON.stringify({ ok: false, error: invalidJson ? 'INVALID_JSON' : 'INTERNAL_ERROR' }));
     }
   };
 }

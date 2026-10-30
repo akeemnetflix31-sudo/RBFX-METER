@@ -137,6 +137,16 @@ await wrapped(fakeReq, fakeRes);
 assert.equal(fakeRes.statusCode, 201);
 assert.equal(responseHeaders['cache-control'], 'no-store');
 assert.deepEqual(JSON.parse(fakeRes.body), { method: 'POST', path: '/api/access', query: 'XAUUSD', payload: { accountNumber: '12345678' } });
+// When the runtime throws during JSON body parsing, the adapter must return 400.
+const malformedReq = {
+  method: 'POST', url: '/api/feed', headers: { host: 'example.test', 'content-type': 'application/json' },
+  get body() { throw new SyntaxError('Unexpected token in JSON'); }
+};
+const malformedRes = { statusCode: 0, setHeader() {}, end(value) { this.body = value.toString(); } };
+await vercelHandler(async () => { throw new Error('should not run'); })(malformedReq, malformedRes);
+assert.equal(malformedRes.statusCode, 400);
+assert.equal(JSON.parse(malformedRes.body).error, 'INVALID_JSON');
+
 
 const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
 const apiFiles = await readdir(new URL('../api/', import.meta.url));
