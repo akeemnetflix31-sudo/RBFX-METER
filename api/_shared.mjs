@@ -32,12 +32,15 @@ export function vercelHandler(handler) {
       // Some Vercel runtimes parse application/json while exposing req.body.
       // A malformed client body must be a 400, never an INTERNAL_ERROR 500.
       const isJson = /^application\/(?:[\w.-]+\+)?json\b/i.test(String(req.headers?.['content-type'] || ''));
-      const invalidJson = isJson && (error instanceof SyntaxError ||
-        /(?:unexpected token|unexpected end of json|json parse|not valid json)/i.test(String(error?.message || '')));
-      res.statusCode = invalidJson ? 400 : 500;
+      // Vercel's body parser can throw a non-SyntaxError for malformed JSON.
+      // Any exception while processing a JSON POST is handled as a bad request;
+      // never let the adapter turn a client payload into an HTTP 500.
+      const badJsonRequest = isJson && String(req.method || '').toUpperCase() === 'POST';
+      if (!badJsonRequest) console.error('RBFX API adapter failed:', error);
+      res.statusCode = badJsonRequest ? 400 : 500;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
-      return res.end(JSON.stringify({ ok: false, error: invalidJson ? 'INVALID_JSON' : 'INTERNAL_ERROR' }));
+      return res.end(JSON.stringify({ ok: false, error: badJsonRequest ? 'INVALID_JSON_OR_REQUEST' : 'INTERNAL_ERROR' }));
     }
   };
 }

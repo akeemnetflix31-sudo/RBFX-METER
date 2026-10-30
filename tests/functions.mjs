@@ -145,7 +145,7 @@ const malformedReq = {
 const malformedRes = { statusCode: 0, setHeader() {}, end(value) { this.body = value.toString(); } };
 await vercelHandler(async () => { throw new Error('should not run'); })(malformedReq, malformedRes);
 assert.equal(malformedRes.statusCode, 400);
-assert.equal(JSON.parse(malformedRes.body).error, 'INVALID_JSON');
+assert.equal(JSON.parse(malformedRes.body).error, 'INVALID_JSON_OR_REQUEST');
 
 
 const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
