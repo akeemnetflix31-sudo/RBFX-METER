@@ -1,4 +1,4 @@
-import { CandlestickSeries, CrosshairMode, createChart } from 'lightweight-charts';
+import { CandlestickSeries, CrosshairMode, LineStyle, createChart } from 'lightweight-charts';
 
 let chart = null;
 let candleSeries = null;
@@ -6,7 +6,8 @@ let host = null;
 let hoverHandler = () => {};
 let resizeObserver = null;
 let activePriceLines = [];
-const PRICE_LINE_COLORS = { ENTRY: '#f2b84b', SL: '#ed6a7a', TP1: '#43c995', TP2: '#43c995', TP3: '#43c995' };
+const PRICE_LINE_COLORS = { ENTRY: '#f59e0b', SL: '#ef4444', TP1: '#10b981', TP2: '#059669', TP3: '#34d399' };
+const PRICE_LINE_TITLES = { ENTRY: 'ENTRY', SL: 'SL', TP1: 'TP 1', TP2: 'TP 2', TP3: 'TP 3' };
 
 function toMarketTime(unixMilliseconds) {
   // Lightweight Charts formats times in the browser's local zone. Rebase bars so the axis is MYT.
@@ -62,7 +63,7 @@ function create(container, onHover) {
   return chart;
 }
 
-function setPriceLines(levels, setupStatus = 'NO_SETUP', statusLabel = '') {
+function setPriceLines(levels, setupStatus = 'NO_SETUP') {
   if (!candleSeries) return;
   for (const line of activePriceLines) {
     try { candleSeries.removePriceLine(line); } catch { /* series may already have been reset */ }
@@ -75,10 +76,10 @@ function setPriceLines(levels, setupStatus = 'NO_SETUP', statusLabel = '') {
     activePriceLines.push(candleSeries.createPriceLine({
       price,
       color: PRICE_LINE_COLORS[role],
-      lineWidth: role === 'ENTRY' ? 2 : 1,
-      lineStyle: 0,
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,
-      title: statusLabel ? `${role} · ${statusLabel}` : role
+      title: PRICE_LINE_TITLES[role]
     }));
   }
 }
@@ -91,7 +92,7 @@ function setData(rows, { fit = false, digits = 2, levels = [], setupStatus = 'NO
   })).filter(bar => Number.isFinite(bar.time) && [bar.open, bar.high, bar.low, bar.close].every(Number.isFinite))
     .sort((a, b) => a.time - b.time);
   candleSeries.setData(candles);
-  setPriceLines(levels, setupStatus, statusLabel);
+  setPriceLines(levels, setupStatus);
   if (fit) chart.timeScale().fitContent();
 }
 
