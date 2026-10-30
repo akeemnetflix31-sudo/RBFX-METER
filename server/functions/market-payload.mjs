@@ -27,6 +27,14 @@ export function normalizeMarketPayload(data, now = Date.now()) {
   const setup = deriveM15Setup(data, now);
   const status = setup.status || { state: 'NO_SETUP', message: 'SCANNING NEXT HIGH-PROBABILITY SETUP....' };
   data.levels = setup.items;
+  data.levelType = status.state;
+  // Keep the existing array contract used by the chart, plus named fields for clients.
+  const priceFor = label => setup.items.find(item => item.label === label)?.price ?? null;
+  data.levelPrices = {
+    entry: priceFor('ENTRY'), sl: priceFor('SL'),
+    tp1: priceFor('TP1'), tp2: priceFor('TP2'), tp3: priceFor('TP3')
+  };
+  Object.assign(data, data.levelPrices);
   data.levelsByTimeframe = { ...data.levelsByTimeframe, M15: {
     state: status.state, side: status.side || null, message: status.message || '', items: setup.items
   } };

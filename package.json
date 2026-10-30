@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node tests/setup-quality.mjs && node tests/m15-market-payload.mjs && node tests/functions.mjs && node tests/direct-feed.mjs",
+    "test": "node tests/setup-quality.mjs && node tests/m15-market-payload.mjs && node tests/functions.mjs && node tests/direct-feed.mjs && node tests/structure-reference.mjs",
     "check": "node --check api/_shared.mjs && node --check api/access.mjs && node --check api/feed.js && node --check server/functions/market-payload.mjs && node --check api/news.mjs && node --check api/owner-stats.mjs && node --check server/functions/feed-router.mjs && node --check server/functions/market.mjs && node --check server/functions/mt5-feed.mjs"
   },
   "dependencies": {

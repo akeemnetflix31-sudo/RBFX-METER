@@ -211,8 +211,54 @@ function deriveM15SetupCore(data, now = Date.now()) {
   };
 }
 
+// Indicative market-structure reference, never presented as an A-grade trade setup.
+// Only fresh, qualified EA candles are eligible; stale/missing data fail closed.
+export function deriveStructureReference(data, now = Date.now()) {
+  if (data?.enableStructureReference !== true || !isQualifiedFeed(data, now) || data?.source !== 'RBFX_MT5') return null;
+  const m15 = cleanClosedM15(intervalRows(data, 'M15'), now);
+  const h1 = (Array.isArray(intervalRows(data, 'H1')) ? intervalRows(data, 'H1') : [])
+    .filter(row => Number.isFinite(epochMs(row?.t)) && epochMs(row.t) + 3_600_000 <= now &&
+      [row?.h, row?.l].every(value => finite(value) !== null && finite(value) > 0))
+    .slice(-8);
+  if (m15.length < 20) return null;
+  const recent = m15.slice(-20);
+  const atr = atrAt(m15, m15.length - 1);
+  const price = finite(data.referencePrice);
+  const side = data.bias === 'BULLISH' || data.bias === 'BEARISH'
+    ? data.bias : data.timeframes?.M15?.direction;
+  if (!Number.isFinite(atr) || atr <= 0 || price === null || price <= 0 ||
+      !['BULLISH', 'BEARISH'].includes(side)) return null;
+  const digits = Number.isInteger(Number(data.digits)) ? Math.max(0, Math.min(8, Number(data.digits))) : 2;
+  const round = value => Number(value.toFixed(digits));
+  const tick = 10 ** -digits;
+  const sign = side === 'BULLISH' ? 1 : -1;
+  const entry = round(price);
+  const candidates = [...recent, ...h1].map(row => finite(sign > 0 ? row.l : row.h))
+    .filter(value => value !== null && (sign > 0 ? value < entry : value > entry));
+  if (!candidates.length) return null;
+  const nearest = sign > 0 ? Math.max(...candidates) : Math.min(...candidates);
+  const minimumRisk = Math.max(atr * 0.6, tick * 3);
+  const structureStop = nearest - sign * atr * 0.1;
+  const stop = round(sign > 0 ? Math.min(structureStop, entry - minimumRisk)
+                                 : Math.max(structureStop, entry + minimumRisk));
+  const risk = Math.abs(entry - stop);
+  const prices = marketLevels(entry, stop, risk, sign, round);
+  if (!prices) return null;
+  return {
+    status: buildStatus('STRUCTURE_REFERENCE', 'noSetup', 'muted', {
+      side, quality: 'INDICATIVE', sourceMode: 'MT5_REFERENCE',
+      message: 'INDICATIVE M15/H1 STRUCTURE · NOT A VERIFIED SETUP OR TRADE SIGNAL.'
+    }),
+    items: setupItems(prices)
+  };
+}
+
 export function deriveM15Setup(data, now = Date.now()) {
   const result = deriveM15SetupCore(data, now);
+  // Invalidated, late, expired and completed setups must not be replaced by a new signal.
+  const reference = ['NO_SETUP', 'INSUFFICIENT'].includes(result.status?.state) && !result.items.length
+    ? deriveStructureReference(data, now) : null;
+  if (reference) return reference;
   if (data?.source !== 'BIQUOTE') return result;
   const note = 'PUBLIC REFERENCE STUDY — NOT BROKER-VERIFIED.';
   return {
